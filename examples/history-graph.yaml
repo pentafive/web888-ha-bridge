@@ -1,0 +1,17 @@
+# Web-888 SDR History Graph Example
+# Track metrics over time
+#
+# Replace "web888" with your device's entity ID prefix if different
+
+type: history-graph
+title: Web-888 SDR - 24 Hour History
+hours_to_show: 24
+entities:
+  - entity: sensor.web888_users
+    name: Active Users
+  - entity: sensor.web888_cpu_temp
+    name: CPU Temperature
+  - entity: sensor.web888_gps_satellites
+    name: GPS Satellites
+  - entity: sensor.web888_total_decodes
+    name: Total Decodes

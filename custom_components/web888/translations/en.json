@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Web-888 SDR",
+        "description": "Enter the connection details for your Web-888 SDR receiver.",
+        "data": {
+          "host": "Host IP Address",
+          "port": "Port",
+          "password": "Admin Password",
+          "mac": "MAC Address",
+          "scan_interval": "Update Interval (seconds)",
+          "enable_channels": "Enable Per-Channel Sensors"
+        },
+        "data_description": {
+          "host": "IP address of your Web-888 (e.g., 192.168.1.100)",
+          "port": "WebSocket port, typically 8073",
+          "password": "Admin password for WebSocket mode (leave blank for HTTP-only)",
+          "mac": "Device MAC address from Network admin tab (enables HA device linking)",
+          "scan_interval": "How often to poll for updates (10-300 seconds)",
+          "enable_channels": "Create sensors for each of the 12 RX channels"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Web-888. Check host IP and port.",
+      "invalid_auth": "Authentication failed. Check admin password.",
+      "timeout": "Connection timed out. Is the device reachable?",
+      "invalid_mac": "Invalid MAC address format. Use AA:BB:CC:DD:EE:FF format.",
+      "not_web888": "Device does not appear to be a Web-888 SDR.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Web-888 is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Web-888 SDR",
+        "data": {
+          "scan_interval": "Update Interval (seconds)",
+          "mode": "Connection Mode",
+          "enable_channels": "Enable Per-Channel Sensors"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "users": {
+        "name": "Users"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "cpu_temp": {
+        "name": "CPU Temperature"
+      },
+      "gps_satellites": {
+        "name": "GPS Satellites"
+      },
+      "gps_fixes": {
+        "name": "GPS Fixes"
+      },
+      "grid_square": {
+        "name": "Grid Square"
+      },
+      "latitude": {
+        "name": "Latitude"
+      },
+      "longitude": {
+        "name": "Longitude"
+      },
+      "total_decodes": {
+        "name": "Total Decodes"
+      },
+      "audio_bandwidth": {
+        "name": "Audio Bandwidth"
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Connected"
+      },
+      "gps_lock": {
+        "name": "GPS Lock"
+      }
+    }
+  }
+}

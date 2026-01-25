@@ -1,0 +1,11 @@
+services:
+  web888-ha-bridge:
+    build: .
+    container_name: web888-ha-bridge
+    restart: unless-stopped
+    env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

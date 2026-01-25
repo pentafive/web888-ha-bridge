@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-888 SDR Dashboard Generator</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --card: #16213e;
+            --accent: #0f3460;
+            --highlight: #00a8cc;
+            --text: #eee;
+            --muted: #888;
+            --warning: #f39c12;
+            --success: #27ae60;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: var(--highlight);
+            margin-bottom: 0.5em;
+        }
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 2em;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        h3 {
+            color: var(--highlight);
+            margin-top: 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 16px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--highlight);
+        }
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 6px;
+            background: var(--accent);
+        }
+        .checkbox-group label:hover {
+            background: var(--highlight);
+        }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--highlight);
+        }
+        button {
+            background: var(--highlight);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: opacity 0.2s;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .output-container {
+            display: none;
+        }
+        .output-container.visible {
+            display: block;
+        }
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .copy-btn {
+            background: var(--accent);
+            padding: 8px 16px;
+            font-size: 14px;
+            margin: 0;
+        }
+        .copy-btn.copied {
+            background: var(--success);
+        }
+        textarea {
+            width: 100%;
+            height: 500px;
+            padding: 16px;
+            border: 2px solid var(--accent);
+            border-radius: 8px;
+            background: var(--bg);
+            color: #7fdbca;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+        .help {
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        .instructions {
+            background: var(--accent);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+        }
+        .instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        a {
+            color: var(--highlight);
+        }
+        .badge {
+            display: inline-block;
+            background: var(--accent);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+        .section-title {
+            border-bottom: 1px solid var(--accent);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+        }
+        .mode-indicator {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+        .ws-only {
+            background: var(--warning);
+            color: #000;
+        }
+        .http-ok {
+            background: var(--success);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web-888 SDR Dashboard Generator</h1>
+        <p class="subtitle">Generate a Home Assistant dashboard for your Web-888 SDR receiver <span class="badge">v1.1.0</span></p>
+
+        <div class="card">
+            <h3>Device Configuration</h3>
+            <label for="deviceName">Device Name</label>
+            <input type="text" id="deviceName" placeholder="web_888" value="web_888">
+            <p class="help">Entity prefix (e.g., sensor.web_888_users). Check your HA entities for the correct name.</p>
+
+            <label for="entryId" style="margin-top: 16px;">Entry ID (optional)</label>
+            <input type="text" id="entryId" placeholder="abc123def456">
+            <p class="help">Optional: config entry ID for unique entity IDs. Leave blank to use device name.</p>
+        </div>
+
+        <div class="card">
+            <h3 class="section-title">Sensor Sections</h3>
+
+            <h4>Core Sensors <span class="mode-indicator http-ok">HTTP+WS</span></h4>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="includeStatus" checked> Connection Status</label>
+                <label><input type="checkbox" id="includeUsers" checked> Users & Uptime</label>
+                <label><input type="checkbox" id="includeGps" checked> GPS Status</label>
+                <label><input type="checkbox" id="includeSnr" checked> SNR Meters</label>
+            </div>
+
+            <h4 style="margin-top: 20px;">Admin Sensors <span class="mode-indicator ws-only">WebSocket Only</span></h4>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="includeCpu" checked> CPU Metrics</label>
+                <label><input type="checkbox" id="includeBandwidth" checked> Bandwidth Usage</label>
+                <label><input type="checkbox" id="includeAudio"> Audio Diagnostics</label>
+                <label><input type="checkbox" id="includeDecodes" checked> FT8/WSPR Decodes</label>
+            </div>
+
+            <h4 style="margin-top: 20px;">Advanced Sensors <span class="mode-indicator ws-only">WebSocket Only</span></h4>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="includeChannels"> Per-Channel Details</label>
+                <label><input type="checkbox" id="includeSatellites"> Satellite Monitoring</label>
+                <label><input type="checkbox" id="includeThermal"> Thermal Alerts</label>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Dashboard Style</h3>
+            <div class="checkbox-group">
+                <label><input type="radio" name="style" value="sections" checked> Sections Layout (Modern)</label>
+                <label><input type="radio" name="style" value="masonry"> Masonry Layout (Classic)</label>
+            </div>
+        </div>
+
+        <button onclick="generateDashboard()">Generate Dashboard YAML</button>
+
+        <div class="output-container" id="outputContainer">
+            <div class="card">
+                <div class="output-header">
+                    <label>Generated Dashboard YAML</label>
+                    <button class="copy-btn" onclick="copyToClipboard()" id="copyBtn">Copy to Clipboard</button>
+                </div>
+                <textarea id="output" readonly></textarea>
+
+                <div class="instructions">
+                    <h3>How to use this dashboard:</h3>
+                    <ol>
+                        <li>Copy the YAML above</li>
+                        <li>In Home Assistant, go to <strong>Settings - Dashboards</strong></li>
+                        <li>Click <strong>Add Dashboard</strong> and create a new one</li>
+                        <li>Open the new dashboard, click the 3-dot menu - <strong>Edit Dashboard</strong></li>
+                        <li>Click the 3-dot menu - <strong>Raw configuration editor</strong></li>
+                        <li>Select all and paste the copied YAML</li>
+                        <li>Click <strong>Save</strong></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Requirements</h3>
+            <ul>
+                <li><a href="https://github.com/pentafive/web888-ha-bridge" target="_blank">Web-888 HA Bridge</a> v1.1.0+</li>
+                <li><a href="https://github.com/piitaya/lovelace-mushroom" target="_blank">Mushroom Cards</a> (HACS Frontend)</li>
+                <li><a href="https://github.com/kalkih/mini-graph-card" target="_blank">Mini Graph Card</a> (HACS Frontend) - for graphs</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function getPrefix() {
+            const name = document.getElementById('deviceName').value.trim() || 'web_888';
+            return name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        }
+
+        function generateHeader() {
+            return `# Web-888 SDR Dashboard - Generated by dashboard-generator
+# Requires: Web-888 HA Bridge v1.1.0+, Mushroom Cards, Mini Graph Card
+title: Web-888 SDR
+path: web888-sdr
+icon: mdi:radio-tower
+`;
+        }
+
+        function generateStatusSection(prefix) {
+            return `
+      - type: custom:mushroom-entity-card
+        entity: binary_sensor.${prefix}_connected
+        name: Connection Status
+        icon: mdi:lan-connect
+        primary_info: state
+        secondary_info: last-updated
+      - type: custom:mushroom-entity-card
+        entity: binary_sensor.${prefix}_gps_lock
+        name: GPS Lock
+        icon: mdi:crosshairs-gps
+`;
+        }
+
+        function generateUsersSection(prefix) {
+            return `
+      - type: entities
+        title: Users & Uptime
+        entities:
+          - entity: sensor.${prefix}_users
+            name: Active Users
+          - entity: sensor.${prefix}_users_max
+            name: Max Users
+          - entity: sensor.${prefix}_uptime
+            name: Uptime
+`;
+        }
+
+        function generateGpsSection(prefix) {
+            return `
+      - type: entities
+        title: GPS Status
+        entities:
+          - entity: sensor.${prefix}_gps_fixes
+            name: GPS Fixes
+          - entity: sensor.${prefix}_gps_satellites
+            name: Satellites Tracked
+          - entity: sensor.${prefix}_gps_good
+            name: Good Satellites
+          - entity: sensor.${prefix}_grid_square
+            name: Grid Square
+          - entity: sensor.${prefix}_gps_fixes_per_min
+            name: Fixes/min
+`;
+        }
+
+        function generateSnrSection(prefix) {
+            return `
+      - type: custom:mini-graph-card
+        name: SNR History
+        entities:
+          - entity: sensor.${prefix}_snr_all
+            name: All Bands
+            color: "#1E88E5"
+          - entity: sensor.${prefix}_snr_hf
+            name: HF Only
+            color: "#43A047"
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        show:
+          labels: true
+          points: false
+`;
+        }
+
+        function generateCpuSection(prefix) {
+            return `
+      - type: custom:mini-graph-card
+        name: CPU Metrics
+        entities:
+          - entity: sensor.${prefix}_cpu_temp
+            name: Temperature
+            color: "#E53935"
+            y_axis: secondary
+          - entity: sensor.${prefix}_cpu_usage
+            name: Usage %
+            color: "#1E88E5"
+        hours_to_show: 24
+        points_per_hour: 4
+        show:
+          labels: true
+      - type: entities
+        entities:
+          - entity: sensor.${prefix}_cpu_freq
+            name: CPU Frequency
+          - entity: binary_sensor.${prefix}_thermal_warning
+            name: Thermal Warning
+`;
+        }
+
+        function generateBandwidthSection(prefix) {
+            return `
+      - type: custom:mini-graph-card
+        name: Bandwidth Usage
+        entities:
+          - entity: sensor.${prefix}_audio_bandwidth
+            name: Audio
+            color: "#1E88E5"
+          - entity: sensor.${prefix}_waterfall_bandwidth
+            name: Waterfall
+            color: "#43A047"
+          - entity: sensor.${prefix}_http_bandwidth
+            name: HTTP
+            color: "#FFA726"
+        hours_to_show: 6
+        points_per_hour: 10
+        aggregate_func: max
+        show:
+          labels: true
+`;
+        }
+
+        function generateAudioSection(prefix) {
+            return `
+      - type: entities
+        title: Audio Diagnostics
+        entities:
+          - entity: sensor.${prefix}_audio_dropped
+            name: Dropped Packets
+          - entity: sensor.${prefix}_audio_underruns
+            name: Buffer Underruns
+`;
+        }
+
+        function generateDecodesSection(prefix) {
+            return `
+      - type: custom:mushroom-entity-card
+        entity: sensor.${prefix}_total_decodes
+        name: Total FT8/WSPR Decodes
+        icon: mdi:radio-tower
+        primary_info: state
+        secondary_info: last-updated
+        icon_color: deep-orange
+      - type: custom:mini-graph-card
+        name: Decode Rate
+        entities:
+          - entity: sensor.${prefix}_total_decodes
+            name: Total Decodes
+            color: "#E53935"
+        hours_to_show: 24
+        points_per_hour: 2
+        aggregate_func: delta
+        show:
+          labels: true
+`;
+        }
+
+        function generateChannelsSection(prefix) {
+            let yaml = `
+      - type: entities
+        title: Channel Status
+        entities:
+`;
+            for (let i = 0; i < 12; i++) {
+                yaml += `          - entity: sensor.${prefix}_channel_${i}_frequency
+            name: "CH${i} Frequency"
+            secondary_info: attribute
+            secondary_attribute: channel_name
+`;
+            }
+            return yaml;
+        }
+
+        function generateSatellitesSection(prefix) {
+            let yaml = `
+      - type: entities
+        title: GPS Satellites (Security Monitoring)
+        entities:
+          - entity: sensor.${prefix}_gps_in_solution
+            name: Satellites In Solution
+          - entity: sensor.${prefix}_gps_avg_snr
+            name: Average SNR
+          - entity: binary_sensor.${prefix}_gps_acquiring
+            name: Acquiring
+`;
+            // Add first few satellite sensors as examples
+            for (let i = 0; i < 4; i++) {
+                yaml += `          - entity: sensor.${prefix}_sat_${i}_snr
+            name: "Sat ${i} SNR"
+`;
+            }
+            return yaml;
+        }
+
+        function generateThermalSection(prefix) {
+            return `
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.${prefix}_thermal_warning
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: Thermal Warning!
+          secondary: "CPU: {{ states('sensor.${prefix}_cpu_temp') }}C"
+          icon: mdi:thermometer-alert
+          icon_color: red
+          card_mod:
+            style: |
+              ha-card {
+                background: rgba(229, 57, 53, 0.2);
+                border: 2px solid #E53935;
+              }
+`;
+        }
+
+        function generateDashboard() {
+            const prefix = getPrefix();
+            const style = document.querySelector('input[name="style"]:checked').value;
+
+            let yaml = generateHeader();
+
+            if (style === 'sections') {
+                yaml += `type: sections
+max_columns: 3
+sections:
+  - cards:
+`;
+            } else {
+                yaml += `type: masonry
+cards:
+`;
+            }
+
+            // Add selected sections
+            if (document.getElementById('includeStatus').checked) {
+                yaml += generateStatusSection(prefix);
+            }
+            if (document.getElementById('includeUsers').checked) {
+                yaml += generateUsersSection(prefix);
+            }
+            if (document.getElementById('includeGps').checked) {
+                yaml += generateGpsSection(prefix);
+            }
+            if (document.getElementById('includeSnr').checked) {
+                yaml += generateSnrSection(prefix);
+            }
+            if (document.getElementById('includeCpu').checked) {
+                yaml += generateCpuSection(prefix);
+            }
+            if (document.getElementById('includeBandwidth').checked) {
+                yaml += generateBandwidthSection(prefix);
+            }
+            if (document.getElementById('includeAudio').checked) {
+                yaml += generateAudioSection(prefix);
+            }
+            if (document.getElementById('includeDecodes').checked) {
+                yaml += generateDecodesSection(prefix);
+            }
+            if (document.getElementById('includeChannels').checked) {
+                yaml += generateChannelsSection(prefix);
+            }
+            if (document.getElementById('includeSatellites').checked) {
+                yaml += generateSatellitesSection(prefix);
+            }
+            if (document.getElementById('includeThermal').checked) {
+                yaml += generateThermalSection(prefix);
+            }
+
+            document.getElementById('output').value = yaml;
+            document.getElementById('outputContainer').classList.add('visible');
+            document.getElementById('output').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function copyToClipboard() {
+            const output = document.getElementById('output');
+            output.select();
+            document.execCommand('copy');
+
+            const btn = document.getElementById('copyBtn');
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+
+            setTimeout(() => {
+                btn.textContent = 'Copy to Clipboard';
+                btn.classList.remove('copied');
+            }, 2000);
+        }
+
+        // Enable generate on Enter key
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                generateDashboard();
+            }
+        });
+    </script>
+</body>
+</html>

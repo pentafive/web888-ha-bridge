@@ -1,0 +1,27 @@
+# Web-888 SDR Glance Card Example
+# Compact overview of key metrics
+#
+# Replace "web888" with your device's entity ID prefix if different
+
+type: glance
+title: Web-888 SDR
+columns: 4
+show_name: true
+show_state: true
+entities:
+  - entity: binary_sensor.web888_connected
+    name: Status
+  - entity: sensor.web888_users
+    name: Users
+  - entity: sensor.web888_cpu_temp
+    name: CPU
+  - entity: sensor.web888_total_decodes
+    name: Decodes
+  - entity: binary_sensor.web888_gps_lock
+    name: GPS
+  - entity: sensor.web888_gps_satellites
+    name: Sats
+  - entity: sensor.web888_grid_square
+    name: Grid
+  - entity: sensor.web888_uptime
+    name: Uptime

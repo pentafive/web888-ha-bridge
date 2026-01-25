@@ -1,0 +1,142 @@
+# Web-888 SDR FT8/WSPR Monitoring Dashboard
+# Focused dashboard for digital mode activity monitoring
+#
+# Replace "web888" with your device's entity ID prefix if different
+# Created for v1.2.1
+
+# === FT8/WSPR Activity Overview ===
+type: entities
+title: FT8/WSPR Activity
+entities:
+  # Decode Counts
+  - entity: sensor.web888_total_decodes
+    name: Total Decodes
+  - entity: sensor.web888_ft8_total_decodes
+    name: FT8 Decodes
+  - entity: sensor.web888_wspr_total_decodes
+    name: WSPR Decodes
+
+  - type: divider
+
+  # Channel Distribution
+  - entity: sensor.web888_ft8_channels
+    name: FT8 Channels
+  - entity: sensor.web888_wspr_channels
+    name: WSPR Channels
+  - entity: sensor.web888_user_channels
+    name: User Channels
+  - entity: sensor.web888_idle_channels
+    name: Idle Channels
+
+  - type: divider
+
+  # v1.2.1 Session Metrics
+  - entity: sensor.web888_preemptible_channels
+    name: Preemptible Channels
+  - entity: sensor.web888_total_session_hours
+    name: Total Session Hours
+
+---
+
+# === Reporter Configuration ===
+type: entities
+title: Reporter Config
+entities:
+  - entity: sensor.web888_reporter_callsign
+    name: Callsign
+  - entity: sensor.web888_reporter_grid
+    name: Grid Square
+  - entity: sensor.web888_reporter_snr_correction
+    name: SNR Correction
+  - entity: sensor.web888_reporter_dt_correction
+    name: dT Correction
+
+  - type: divider
+
+  - entity: sensor.web888_ft8_autorun_channels
+    name: FT8 Autorun Slots
+  - entity: sensor.web888_wspr_autorun_channels
+    name: WSPR Autorun Slots
+
+---
+
+# === Per-Channel FT8 Monitoring ===
+# Example: Monitoring specific FT8 channels with session info
+# Adjust channel numbers based on your autorun configuration
+
+type: entities
+title: FT8 Channel Details
+entities:
+  # Channel 2 - Example FT8-80m
+  - entity: sensor.web888_channel_2_frequency
+    name: Channel 2 Frequency
+    secondary_info: attribute
+    attribute: session_time
+  - entity: sensor.web888_channel_2_decoded
+    name: Channel 2 Decodes
+
+  - type: divider
+
+  # Channel 4 - Example FT8-40m
+  - entity: sensor.web888_channel_4_frequency
+    name: Channel 4 Frequency
+    secondary_info: attribute
+    attribute: session_time
+  - entity: sensor.web888_channel_4_decoded
+    name: Channel 4 Decodes
+
+  - type: divider
+
+  # Channel 6 - Example FT8-20m
+  - entity: sensor.web888_channel_6_frequency
+    name: Channel 6 Frequency
+    secondary_info: attribute
+    attribute: session_time
+  - entity: sensor.web888_channel_6_decoded
+    name: Channel 6 Decodes
+
+---
+
+# === FT8/WSPR Decode History ===
+type: history-graph
+title: Decode Activity (24h)
+hours_to_show: 24
+entities:
+  - entity: sensor.web888_ft8_total_decodes
+    name: FT8
+  - entity: sensor.web888_wspr_total_decodes
+    name: WSPR
+  - entity: sensor.web888_total_decodes
+    name: Total
+
+---
+
+# === Glance Card for FT8/WSPR ===
+type: glance
+title: FT8/WSPR Quick View
+columns: 4
+entities:
+  - entity: sensor.web888_total_decodes
+    name: Decodes
+  - entity: sensor.web888_ft8_channels
+    name: FT8
+  - entity: sensor.web888_wspr_channels
+    name: WSPR
+  - entity: sensor.web888_total_session_hours
+    name: Hours
+
+---
+
+# === Diagnostic Counters ===
+# v1.2.1: Monitor for decoding issues
+type: entities
+title: Decode Health
+entities:
+  - entity: sensor.web888_sequence_errors
+    name: Sequence Errors
+  - entity: sensor.web888_realtime_errors
+    name: Realtime Errors
+  - entity: sensor.web888_audio_dropped
+    name: Audio Dropped
+  - entity: sensor.web888_audio_underruns
+    name: Audio Underruns

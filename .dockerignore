@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+env
+.pytest_cache
+.coverage
+.ruff_cache
+*.egg-info
+dist
+build
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Documentation
+*.md
+!README.md
+docs
+images
+
+# Local directories
+Archives
+Research
+CLAUDE.md
+GEMINI.md
+
+# Test files
+tests
+pytest.ini
+
+# HACS component (separate deployment)
+custom_components
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log

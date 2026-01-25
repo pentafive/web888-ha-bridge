@@ -1,0 +1,13 @@
+{
+  "domain": "web888",
+  "name": "Web-888 SDR Monitor",
+  "codeowners": ["@pentafive"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/pentafive/web888-ha-bridge",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/pentafive/web888-ha-bridge/issues",
+  "requirements": ["aiohttp>=3.9.0", "websockets>=12.0"],
+  "version": "1.0.0"
+}
