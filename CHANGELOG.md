@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-25
+
+### Added
+
+#### Full Device Configuration Exposure (WebSocket Only)
+
+All device configuration is now parsed from WebSocket `load_cfg` and `load_adm` messages and exposed as sensors.
+
+##### Calibration Sensors (Diagnostic)
+- **S-Meter Calibration** - S-meter offset (dB)
+- **Waterfall Calibration** - Waterfall offset (dB)
+- **DC Offset I/Q** - ADC DC offset correction
+- **Clock Adjustment** - Clock trim value
+- **ADC Clock Correction** - ADC clock frequency correction
+- **Overload Mute** - Overload mute threshold (dB)
+
+##### Session/Access Config Sensors
+- **Inactivity Timeout** - Auto-disconnect timeout (minutes)
+- **IP Rate Limit** - Per-IP connection rate limit (minutes)
+- **Password-Free Channels** - Channels without password requirement
+- **Camping Slots** - Number of camping slots allowed
+- **API Channels** - Channels for external API access
+- **TDoA Channels** - Channels for TDoA operations
+
+##### Network Config Sensors
+- **Configured IP** - Static IP if configured
+- **Service Port** - Web service port
+
+##### Device Info Sensors
+- **Device Location** - Location string from config
+- **Antenna Description** - Antenna info from config
+- **Altitude ASL** - Altitude above sea level (meters)
+- **Owner Info** - Owner contact email
+- **Admin Email** - Admin contact email
+
+##### Feature Flag Binary Sensors (Config Category)
+- **GPS Enabled** - Whether GPS is enabled
+- **GPS Correction** - GPS frequency correction enabled
+- **DRM Enabled** - Digital Radio Mondiale extension enabled
+- **WSPR Enabled** - WSPR extension enabled
+- **WSPR Spot Logging** - WSPR spot logging to file
+- **WSPR Auto-Update Grid** - Auto-update grid from GPS
+- **Server Enabled** - KiwiSDR server mode enabled
+- **Airband Mode** - Airband receive mode
+- **Static IP Mode** - Using static IP configuration
+- **SDR.hu Listed** - Registered with SDR.hu directory
+- **KiwiSDR.com Listed** - Registered with KiwiSDR.com
+
+### Changed
+
+- **Separate WSPR and FT8 Reporter Fields**: Reporter callsign/grid now stored separately for WSPR and FT8
+  - `wspr_callsign`, `wspr_grid` - For wsprnet.org reporting
+  - `ft8_callsign`, `ft8_grid` - For PSKReporter (often empty, falls back to WSPR)
+  - Computed properties provide effective callsign/grid (FT8 if set, else WSPR)
+
+### Technical Notes
+
+- New `DeviceConfig` dataclass with ~50 configuration fields
+- Parses both `MSG load_cfg=` (main config) and `MSG load_adm=` (admin config)
+- Feature flags use `EntityCategory.CONFIG` for HA organization
+- Calibration sensors use `EntityCategory.DIAGNOSTIC`
+- All config sensors are `websocket_only=True` (admin mode required)
+- New sensor count (v1.2.0):
+  - Device sensors: ~70 (adds ~15 config sensors)
+  - Binary sensors: 17 (adds 11 feature flag sensors)
+  - Channel/satellite sensors: unchanged
+
+---
+
 ## [1.1.0] - 2026-01-24
 
 ### Added

@@ -25,16 +25,16 @@ from .const import (
     CONF_MAC,
     CONF_MODE,
     CONF_PASSWORD,
-    CONF_PSKR_CALLSIGN,
     CONF_PORT,
+    CONF_PSKR_CALLSIGN,
     CONF_SCAN_INTERVAL,
     CONF_THERMAL_THRESHOLD,
     CONNECTION_TIMEOUT,
     DEFAULT_ENABLE_CHANNELS,
     DEFAULT_ENABLE_SATELLITES,
     DEFAULT_MODE,
-    DEFAULT_PSKR_CALLSIGN,
     DEFAULT_PORT,
+    DEFAULT_PSKR_CALLSIGN,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_THERMAL_THRESHOLD,
     DOMAIN,
@@ -68,7 +68,9 @@ async def test_connection(host: str, port: int, password: str = "") -> tuple[boo
     url = f"http://{host}:{port}/status"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=CONNECTION_TIMEOUT)) as resp:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=CONNECTION_TIMEOUT)
+            ) as resp:
                 if resp.status != 200:
                     return False, "cannot_connect"
                 # Parse status to verify it's a Web-888
@@ -107,9 +109,7 @@ class Web888ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -144,8 +144,12 @@ class Web888ConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_PASSWORD: password,
                             CONF_MAC: mac_formatted,
                             CONF_MODE: DEFAULT_MODE,
-                            CONF_SCAN_INTERVAL: user_input.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-                            CONF_ENABLE_CHANNELS: user_input.get(CONF_ENABLE_CHANNELS, DEFAULT_ENABLE_CHANNELS),
+                            CONF_SCAN_INTERVAL: user_input.get(
+                                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                            ),
+                            CONF_ENABLE_CHANNELS: user_input.get(
+                                CONF_ENABLE_CHANNELS, DEFAULT_ENABLE_CHANNELS
+                            ),
                         },
                     )
 
@@ -177,9 +181,7 @@ class Web888ConfigFlow(ConfigFlow, domain=DOMAIN):
 class Web888OptionsFlow(OptionsFlowWithConfigEntry):
     """Handle options flow for Web-888 SDR Monitor."""
 
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
@@ -243,7 +245,9 @@ class Web888OptionsFlow(OptionsFlowWithConfigEntry):
                     vol.Optional(
                         CONF_ENABLE_SATELLITES,
                         default=current[CONF_ENABLE_SATELLITES],
-                        description={"suggested_value": "Enable per-satellite sensors for security monitoring"},
+                        description={
+                            "suggested_value": "Enable per-satellite sensors for security monitoring"
+                        },
                     ): bool,
                     vol.Optional(
                         CONF_THERMAL_THRESHOLD,
