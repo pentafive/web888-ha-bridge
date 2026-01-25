@@ -30,6 +30,13 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
+# v1.2.1: Timeout constants (seconds)
+HTTP_TIMEOUT = 10
+WS_PING_INTERVAL = 20
+WS_PING_TIMEOUT = 10
+WS_CLOSE_TIMEOUT = 10
+CONFIG_DRAIN_TIMEOUT = 5.0
+
 
 class ClientMode(Enum):
     HTTP = "http"
@@ -47,7 +54,22 @@ class ChannelInfo:
     extension: str = ""
     decoded_count: int = 0
     client_ip: str = ""
-    session_time: str = ""
+    session_time: str = ""  # Format: "HHH:MM:SS" e.g. "518:00:56"
+    preemptible: bool = False  # v1.2.1: Can be preempted by users
+
+    @property
+    def session_seconds(self) -> int:
+        """Convert session_time (HHH:MM:SS) to total seconds."""
+        if not self.session_time:
+            return 0
+        try:
+            parts = self.session_time.split(":")
+            if len(parts) == 3:
+                hours, mins, secs = int(parts[0]), int(parts[1]), int(parts[2])
+                return hours * 3600 + mins * 60 + secs
+        except (ValueError, IndexError):
+            pass
+        return 0
 
     @property
     def frequency_mhz(self) -> float:
@@ -127,6 +149,9 @@ class SystemStats:
     total_kbps: float = 0.0
     dropped: int = 0
     underruns: int = 0
+    # v1.2.1: Additional diagnostic counters (from stats "0 sequence, 0 realtime")
+    sequence_errors: int = 0
+    realtime_errors: int = 0
 
 
 @dataclass
@@ -240,6 +265,11 @@ class DeviceConfig:
     netmask: str = ""  # Network mask
     gateway: str = ""  # Default gateway
 
+    # v1.2.1: Device identity (from config_cb message)
+    mac_address: str = ""  # Ethernet MAC address
+    serial_number: str = ""  # Device serial number
+    dna: str = ""  # Hardware DNA/ID
+
 
 @dataclass
 class Web888Status:
@@ -320,6 +350,8 @@ class Web888Client:
         self._poll_task: asyncio.Task | None = None
         self._ws = None
         self._ws_task: asyncio.Task | None = None
+        # v1.2.1: Reusable HTTP session for connection pooling
+        self._http_session: aiohttp.ClientSession | None = None
 
     @property
     def base_url(self) -> str:
@@ -369,6 +401,11 @@ class Web888Client:
             await self._ws.close()
             self._ws = None
 
+        # v1.2.1: Close HTTP session to prevent resource leaks
+        if self._http_session and not self._http_session.closed:
+            await self._http_session.close()
+            self._http_session = None
+
         self.status.connected = False
         logger.info(f"Disconnected from Web-888 at {self.host}")
 
@@ -392,31 +429,45 @@ class Web888Client:
             except Exception as e:
                 logger.warning(f"Poll error: {e}")
 
-    async def _fetch_http_status(self) -> bool:
-        """Fetch status from HTTP endpoint."""
+    async def _get_http_session(self) -> aiohttp.ClientSession:
+        """Get or create reusable HTTP session."""
+        if self._http_session is None or self._http_session.closed:
+            self._http_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=HTTP_TIMEOUT)
+            )
+        return self._http_session
+
+    async def fetch_http_status(self) -> bool:
+        """Fetch status from HTTP endpoint (public method)."""
         url = f"{self.base_url}/status"
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        text = await resp.text()
-                        self._parse_http_status(text)
-                        self.status.connected = True
-                        self.status.last_update = time.time()
+            session = await self._get_http_session()
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    self._parse_http_status(text)
+                    self.status.connected = True
+                    self.status.last_update = time.time()
 
-                        if self.on_update:
+                    if self.on_update:
+                        try:
                             self.on_update(self.status)
+                        except Exception as cb_err:
+                            logger.error(f"on_update callback error: {cb_err}")
 
-                        return True
-                    else:
-                        logger.warning(f"HTTP status failed: {resp.status}")
-                        self.status.connected = False
-                        return False
+                    return True
+                else:
+                    logger.warning(f"HTTP status failed: {resp.status}")
+                    self.status.connected = False
+                    return False
         except Exception as e:
             logger.error(f"HTTP fetch failed: {e}")
             self.status.connected = False
             return False
+
+    # v1.2.1: Keep old name as alias for backward compatibility
+    _fetch_http_status = fetch_http_status
 
     def _parse_http_status(self, text: str):
         """Parse key=value status response."""
@@ -489,19 +540,29 @@ class Web888Client:
             import websockets
 
             logger.info(f"Connecting to WebSocket: {self.ws_url}")
+            # v1.2.1: Enable keep-alive pings to detect dead connections
             self._ws = await websockets.connect(
                 self.ws_url,
-                ping_interval=None,
-                close_timeout=10,
+                ping_interval=WS_PING_INTERVAL,
+                ping_timeout=WS_PING_TIMEOUT,
+                close_timeout=WS_CLOSE_TIMEOUT,
             )
 
-            # Send auth
+            # Send auth (note: KiwiSDR protocol sends password in plaintext - unavoidable)
             if self.password:
+                logger.debug("Sending WebSocket authentication")
                 await self._ws.send(f"SET auth t=admin p={self.password}")
 
             # Drain initial config messages, check first badp response
+            # v1.2.1: Add overall timeout to prevent slow connections from hanging
             auth_checked = False
+            auth_required = bool(self.password)
+            drain_start = time.time()
             for _ in range(20):
+                # Check overall timeout
+                if time.time() - drain_start > CONFIG_DRAIN_TIMEOUT:
+                    logger.warning("Config drain loop timeout - continuing with partial config")
+                    break
                 try:
                     msg = await asyncio.wait_for(self._ws.recv(), timeout=0.3)
                     text = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else msg
@@ -512,7 +573,7 @@ class Web888Client:
                             logger.debug("Authentication successful")
                             auth_checked = True
                         else:
-                            logger.error(f"Authentication failed: {text}")
+                            logger.error("Authentication failed (bad password)")
                             return False
 
                     # v1.2.0: Parse config messages for full device config
@@ -521,12 +582,34 @@ class Web888Client:
                         self._parse_cfg_message(text)
                     if "MSG load_adm=" in text:
                         self._parse_adm_message(text)
+                    # v1.2.1: Parse config_cb for MAC address and serial number
+                    if "MSG config_cb=" in text:
+                        self._parse_config_cb(text)
 
                     # Stop draining after config is loaded
                     if "cfg_loaded" in text:
                         break
                 except asyncio.TimeoutError:
                     break
+
+            # v1.2.1: Validate auth succeeded if password was provided
+            if auth_required and not auth_checked:
+                logger.error("Authentication response not received - connection may be unauthorized")
+                await self._ws.close()
+                return False
+
+            # v1.2.1: Request config_cb for MAC address and device identity
+            # This sends MSG config_cb= with MAC, serial number, and DNA
+            await self._ws.send("SET GET_CONFIG")
+            try:
+                for _ in range(10):
+                    msg = await asyncio.wait_for(self._ws.recv(), timeout=0.3)
+                    text = msg.decode("utf-8", errors="ignore") if isinstance(msg, bytes) else msg
+                    if "MSG config_cb=" in text:
+                        self._parse_config_cb(text)
+                        break
+            except asyncio.TimeoutError:
+                logger.debug("config_cb not received (optional)")
 
             # v1.1.0 Hybrid mode: fetch HTTP /status for device metadata
             # (name, location, version, antenna, bands, sdr_hw, etc.)
@@ -581,8 +664,12 @@ class Web888Client:
                     self._parse_ws_message(message)
                     self.status.last_update = time.time()
 
+                    # v1.2.1: Isolate callback errors - don't let HA sensor errors kill connection
                     if self.on_update:
-                        self.on_update(self.status)
+                        try:
+                            self.on_update(self.status)
+                        except Exception as cb_err:
+                            logger.error(f"on_update callback error (connection unaffected): {cb_err}")
 
         except asyncio.CancelledError:
             logger.debug("WebSocket receive loop cancelled")
@@ -637,11 +724,17 @@ class Web888Client:
                 # Decode URL-encoded status (e.g., "410%20decoded" -> "410 decoded")
                 status_str = unquote(ch.get("g", ""))
                 decoded_count = 0
+                preemptible = False
+
                 if "decoded" in status_str:
                     try:
                         decoded_count = int(status_str.split()[0])
                     except (ValueError, IndexError):
                         pass
+
+                # v1.2.1: Check for preemptible flag (e.g., "13693 decoded, preemptible")
+                if "preemptible" in status_str.lower():
+                    preemptible = True
 
                 channel = ChannelInfo(
                     index=ch.get("i", 0),
@@ -652,6 +745,7 @@ class Web888Client:
                     decoded_count=decoded_count,
                     client_ip=ch.get("a", ""),
                     session_time=ch.get("t", ""),
+                    preemptible=preemptible,
                 )
                 channels.append(channel)
 
@@ -677,6 +771,9 @@ class Web888Client:
             self.status.system.http_kbps = data.get("ah", 0)
             self.status.system.dropped = data.get("ad", 0)
             self.status.system.underruns = data.get("au", 0)
+            # v1.2.1: Sequence and realtime errors (from stats "0 sequence, 0 realtime")
+            self.status.system.sequence_errors = data.get("as", 0)
+            self.status.system.realtime_errors = data.get("ar", 0)
 
             # GPS from stats
             self.status.gps.acquiring = data.get("ga", 0) == 1
@@ -923,7 +1020,19 @@ class Web888Client:
                 cfg.use_static_ip = ip_cfg.get("use_static", False)
                 cfg.netmask = ip_cfg.get("netmask", "")
                 cfg.gateway = ip_cfg.get("gateway", "")
+                # v1.2.1: Auto-discover MAC address from admin config
+                mac = ip_cfg.get("mac", "") or ip_cfg.get("mac_address", "")
+                if mac:
+                    cfg.mac_address = mac
+                    logger.info(f"Auto-discovered MAC address: {mac}")
             cfg.port = data.get("port", 8073)
+
+            # v1.2.1: Also check for MAC at top level (some firmware versions)
+            if not cfg.mac_address:
+                mac = data.get("mac", "") or data.get("mac_address", "") or data.get("ethernet_mac", "")
+                if mac:
+                    cfg.mac_address = mac
+                    logger.info(f"Auto-discovered MAC address (top-level): {mac}")
 
             logger.info(f"Parsed admin config: GPS={cfg.enable_gps}, server={cfg.server_enabled}")
 
@@ -931,6 +1040,47 @@ class Web888Client:
             logger.debug(f"adm JSON parse error: {e}")
         except Exception as e:
             logger.debug(f"adm parse error: {e}")
+
+    def _parse_config_cb(self, text: str):
+        """Parse MSG config_cb= message for device identity.
+
+        This contains MAC address, serial number, and hardware DNA.
+        Response to SET GET_CONFIG command.
+
+        Format: {"r":12,"g":32,"s":24120097,"pu":"1.2.3.4","pe":8073,
+                 "pv":"10.1.1.28","pi":8073,"n":24,"m":"6a:8c:58:18:61:f0",
+                 "v1":2024,"v2":1130,"d1":3,"d2":20,"dna":"..."}
+        """
+        try:
+            if "MSG config_cb=" not in text:
+                return
+
+            cb_start = text.find("MSG config_cb=") + len("MSG config_cb=")
+            cb_json = text[cb_start:].strip()
+            data = json.loads(cb_json)
+
+            cfg = self.status.config
+
+            # v1.2.1: Extract device identity
+            mac = data.get("m", "")
+            if mac:
+                cfg.mac_address = mac.upper()
+                logger.info(f"Auto-discovered MAC address: {cfg.mac_address}")
+
+            serno = data.get("s", "")
+            if serno:
+                cfg.serial_number = str(serno)
+                logger.info(f"Device serial number: {cfg.serial_number}")
+
+            dna = data.get("dna", "")
+            if dna:
+                cfg.dna = dna
+                logger.debug(f"Device DNA: {cfg.dna}")
+
+        except json.JSONDecodeError as e:
+            logger.debug(f"config_cb JSON parse error: {e}")
+        except Exception as e:
+            logger.debug(f"config_cb parse error: {e}")
 
 
 # ========== CLI Testing ==========

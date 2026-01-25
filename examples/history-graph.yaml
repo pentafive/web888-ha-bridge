@@ -1,17 +1,63 @@
-# Web-888 SDR History Graph Example
+# Web-888 SDR History Graph Examples
 # Track metrics over time
 #
 # Replace "web888" with your device's entity ID prefix if different
+# Updated for v1.2.1
 
+# === Decode Activity History ===
 type: history-graph
-title: Web-888 SDR - 24 Hour History
+title: Web-888 Decode Activity
 hours_to_show: 24
 entities:
-  - entity: sensor.web888_users
-    name: Active Users
-  - entity: sensor.web888_cpu_temp
-    name: CPU Temperature
-  - entity: sensor.web888_gps_satellites
-    name: GPS Satellites
+  - entity: sensor.web888_ft8_total_decodes
+    name: FT8 Decodes
+  - entity: sensor.web888_wspr_total_decodes
+    name: WSPR Decodes
   - entity: sensor.web888_total_decodes
     name: Total Decodes
+
+---
+
+# === System Health History ===
+type: history-graph
+title: Web-888 System Health
+hours_to_show: 24
+entities:
+  - entity: sensor.web888_cpu_temp
+    name: CPU Temperature
+  - entity: sensor.web888_cpu_usage
+    name: CPU Usage
+  - entity: sensor.web888_audio_dropped
+    name: Audio Dropped
+  - entity: sensor.web888_sequence_errors
+    name: Sequence Errors
+
+---
+
+# === GPS Performance History ===
+type: history-graph
+title: Web-888 GPS Performance
+hours_to_show: 24
+entities:
+  - entity: sensor.web888_gps_tracking
+    name: Tracking
+  - entity: sensor.web888_gps_in_solution
+    name: In Solution
+  - entity: sensor.web888_gps_avg_snr
+    name: Avg SNR
+
+---
+
+# === Channel Activity History ===
+type: history-graph
+title: Web-888 Channel Activity
+hours_to_show: 24
+entities:
+  - entity: sensor.web888_ft8_channels
+    name: FT8 Channels
+  - entity: sensor.web888_wspr_channels
+    name: WSPR Channels
+  - entity: sensor.web888_user_channels
+    name: User Channels
+  - entity: sensor.web888_idle_channels
+    name: Idle Channels

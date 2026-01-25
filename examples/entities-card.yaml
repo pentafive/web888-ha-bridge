@@ -1,28 +1,88 @@
-# Web-888 SDR Entities Card Example
+# Web-888 SDR Comprehensive Entities Card
 # Add this card to your Home Assistant dashboard
 #
 # Replace "web888" with your device's entity ID prefix if different
+# Updated for v1.2.1
 
 type: entities
 title: Web-888 SDR
 entities:
+  # Connection Status
   - entity: binary_sensor.web888_connected
     name: Connection Status
   - entity: sensor.web888_users
     name: Active Users
   - entity: sensor.web888_uptime
     name: Uptime
+
+  - type: divider
+
+  # System Health
   - entity: sensor.web888_cpu_temp
     name: CPU Temperature
+  - entity: sensor.web888_cpu_freq
+    name: CPU Frequency
+  - entity: sensor.web888_cpu_usage
+    name: CPU Usage
+  - entity: binary_sensor.web888_thermal_warning
+    name: Thermal Warning
+
   - type: divider
+
+  # GPS Status
   - entity: binary_sensor.web888_gps_lock
     name: GPS Lock
-  - entity: sensor.web888_gps_satellites
-    name: Satellites
-  - entity: sensor.web888_gps_fixes
-    name: Fixes
+  - entity: sensor.web888_gps_good
+    name: Good Satellites
+  - entity: sensor.web888_gps_tracking
+    name: Tracking
+  - entity: sensor.web888_gps_in_solution
+    name: In Solution
   - entity: sensor.web888_grid_square
     name: Grid Square
+
   - type: divider
+
+  # Signal Quality
+  - entity: sensor.web888_snr_all
+    name: SNR All Bands
+  - entity: sensor.web888_snr_hf
+    name: SNR HF
+
+  - type: divider
+
+  # Decode Activity
   - entity: sensor.web888_total_decodes
     name: Total Decodes
+  - entity: sensor.web888_ft8_total_decodes
+    name: FT8 Decodes
+  - entity: sensor.web888_wspr_total_decodes
+    name: WSPR Decodes
+
+  - type: divider
+
+  # Channel Status
+  - entity: sensor.web888_ft8_channels
+    name: FT8 Channels
+  - entity: sensor.web888_wspr_channels
+    name: WSPR Channels
+  - entity: sensor.web888_user_channels
+    name: User Channels
+  - entity: sensor.web888_idle_channels
+    name: Idle Channels
+
+  - type: divider
+
+  # v1.2.1 Diagnostics
+  - entity: sensor.web888_preemptible_channels
+    name: Preemptible Channels
+  - entity: sensor.web888_total_session_hours
+    name: Total Session Hours
+  - entity: sensor.web888_sequence_errors
+    name: Sequence Errors
+  - entity: sensor.web888_realtime_errors
+    name: Realtime Errors
+  - entity: sensor.web888_audio_dropped
+    name: Audio Dropped
+  - entity: sensor.web888_audio_underruns
+    name: Audio Underruns

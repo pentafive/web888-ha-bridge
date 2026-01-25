@@ -106,13 +106,25 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_status: Web888Status | None = None
 
     @property
+    def effective_mac(self) -> str:
+        """Return MAC address: user-provided or auto-discovered from device config."""
+        # Prefer user-provided MAC
+        if self.mac:
+            return self.mac
+        # v1.2.1: Fall back to auto-discovered MAC from WebSocket admin config
+        if self._last_status and self._last_status.config.mac_address:
+            return self._last_status.config.mac_address
+        return ""
+
+    @property
     def device_info(self) -> dict[str, Any]:
         """Return device information for Home Assistant device registry."""
         identifiers = {(DOMAIN, self.entry.entry_id)}
 
-        # Add MAC as additional identifier if provided
-        if self.mac:
-            mac_formatted = self.mac.upper().replace("-", ":")
+        # v1.2.1: Use effective MAC (user-provided or auto-discovered)
+        mac = self.effective_mac
+        if mac:
+            mac_formatted = mac.upper().replace("-", ":")
             identifiers.add((DOMAIN, mac_formatted))
 
         info = {
@@ -125,8 +137,8 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         # Add MAC as connection for device linking
-        if self.mac:
-            mac_formatted = self.mac.upper().replace("-", ":")
+        if mac:
+            mac_formatted = mac.upper().replace("-", ":")
             info["connections"] = {("mac", mac_formatted)}
 
         return info
@@ -149,6 +161,14 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Web-888 SDR."""
         try:
+            # v1.2.1: Sync coordinator state with client state
+            # If client reports disconnected, reset coordinator state to trigger reconnect
+            if self._connected and not self._client.status.connected:
+                _LOGGER.warning(
+                    "Client reports disconnected from %s:%s, will reconnect", self.host, self.port
+                )
+                self._connected = False
+
             # Connect if not connected
             if not self._connected:
                 _LOGGER.debug(
@@ -160,9 +180,10 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.info("Connected to Web-888 at %s:%s", self.host, self.port)
 
             # For HTTP mode, fetch fresh status
+            # v1.2.1: Use public method instead of private
             if self.mode == MODE_HTTP:
                 await asyncio.wait_for(
-                    self._client._fetch_http_status(), timeout=CONNECTION_TIMEOUT
+                    self._client.fetch_http_status(), timeout=CONNECTION_TIMEOUT
                 )
 
             # Get current status
@@ -229,6 +250,28 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else None,
                 "audio_dropped": status.system.dropped if self.mode != MODE_HTTP else None,
                 "audio_underruns": status.system.underruns if self.mode != MODE_HTTP else None,
+                # v1.2.1: Sequence and realtime diagnostic errors
+                "sequence_errors": (
+                    status.system.sequence_errors if self.mode != MODE_HTTP else None
+                ),
+                "realtime_errors": (
+                    status.system.realtime_errors if self.mode != MODE_HTTP else None
+                ),
+                # v1.2.1: Channel aggregate metrics
+                "total_session_hours": (
+                    sum(ch.session_seconds for ch in status.channels) / 3600.0
+                    if status.channels
+                    else 0.0
+                )
+                if self.mode != MODE_HTTP
+                else None,
+                "preemptible_channels": (
+                    sum(1 for ch in status.channels if ch.preemptible)
+                    if status.channels
+                    else 0
+                )
+                if self.mode != MODE_HTTP
+                else None,
                 # v1.1.0: Extended GPS sensors (WebSocket only)
                 "gps_acquiring": status.gps.acquiring if self.mode != MODE_HTTP else None,
                 "gps_tracking": status.gps.tracking if self.mode != MODE_HTTP else None,
@@ -253,9 +296,10 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "freq_offset": status.freq_offset,
                 "sdr_hw": status.sdr_hw,
                 # v1.1.0: Thermal warning (WebSocket only)
+                # v1.2.1: Use 'is not None' to handle temp=0 correctly
                 "thermal_warning": (
                     status.system.cpu_temp_c >= self.thermal_threshold
-                    if status.system.cpu_temp_c
+                    if status.system.cpu_temp_c is not None
                     else False
                 )
                 if self.mode != MODE_HTTP
@@ -412,6 +456,10 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 "extension": ch.extension,
                                 "is_extension": ch.is_extension,
                                 "client_ip": ch.client_ip,
+                                # v1.2.1: Session time and preemptible status
+                                "session_time": ch.session_time,
+                                "session_seconds": ch.session_seconds,
+                                "preemptible": ch.preemptible,
                             }
                         )
                     else:
@@ -428,25 +476,50 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 "extension": "",
                                 "is_extension": False,
                                 "client_ip": "",
+                                # v1.2.1: Session time and preemptible status
+                                "session_time": "",
+                                "session_seconds": 0,
+                                "preemptible": False,
                             }
                         )
 
             # v1.1.0: Add per-satellite data if enabled (WebSocket only)
-            if self.enable_satellites and self.mode != MODE_HTTP and status.gps.satellites:
-                for i, sat in enumerate(status.gps.satellites[:MAX_SATELLITES]):
-                    data["satellites"].append(
-                        {
-                            "index": i,
-                            "channel": sat.channel,
-                            "system": sat.system,  # N=NavStar, G=GLONASS, B=BeiDou
-                            "prn": sat.prn,
-                            "snr": sat.snr,
-                            "rssi": sat.rssi,
-                            "azimuth": sat.azimuth,
-                            "elevation": sat.elevation,
-                            "in_solution": sat.in_solution,
-                        }
-                    )
+            # v1.2.1: Pad array to MAX_SATELLITES so all sensors show as available
+            if self.enable_satellites and self.mode != MODE_HTTP:
+                tracked_sats = status.gps.satellites[:MAX_SATELLITES] if status.gps.satellites else []
+                for i in range(MAX_SATELLITES):
+                    if i < len(tracked_sats):
+                        sat = tracked_sats[i]
+                        data["satellites"].append(
+                            {
+                                "index": i,
+                                "channel": sat.channel,
+                                "system": sat.system,  # N=NavStar, G=GLONASS, B=BeiDou
+                                "prn": sat.prn,
+                                "snr": sat.snr,
+                                "rssi": sat.rssi,
+                                "azimuth": sat.azimuth,
+                                "elevation": sat.elevation,
+                                "in_solution": sat.in_solution,
+                                "tracked": True,
+                            }
+                        )
+                    else:
+                        # Placeholder for untracked satellite slot
+                        data["satellites"].append(
+                            {
+                                "index": i,
+                                "channel": None,
+                                "system": None,
+                                "prn": None,
+                                "snr": None,
+                                "rssi": None,
+                                "azimuth": None,
+                                "elevation": None,
+                                "in_solution": False,
+                                "tracked": False,
+                            }
+                        )
 
             return data
 

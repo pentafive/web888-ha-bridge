@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-01-25
+
+### Fixed
+
+- **EntityCategory.CONFIG Error** - Changed `EntityCategory.CONFIG` to `EntityCategory.DIAGNOSTIC` for all v1.2.0 feature flag binary sensors and session config sensors. Home Assistant does not allow CONFIG category for sensor/binary_sensor entities - only DIAGNOSTIC is valid for read-only entities.
+  - Affected binary sensors: GPS Enabled, GPS Correction, DRM Enabled, WSPR Enabled, WSPR Spot Logging, WSPR Auto-Update Grid, Server Enabled, Airband Mode, Static IP Mode, SDR.hu Listed, KiwiSDR.com Listed
+  - Affected sensors: Inactivity Timeout, Password-Free Channels, Camping Slots, API Channels
+
+- **WebSocket Disconnection Handling** - Improved WebSocket connection stability:
+  - Enabled keep-alive pings (`ping_interval=20`, `ping_timeout=10`) to detect dead connections
+  - Added coordinator state sync - coordinator now detects when client reports disconnected and triggers reconnect
+  - Reduces "code=1006" (abnormal closure) errors that caused sensors to become unavailable
+
+- **WebSocket Authentication Validation** - Now validates that authentication actually succeeded before continuing. Previously, if the auth response wasn't received within the drain loop, connection would proceed as if authenticated.
+
+- **Config Flow Import Error** - Fixed missing return statement after ImportError in password validation. Previously, if the web888_client module failed to import, auth test was silently skipped.
+
+- **Callback Error Isolation** - Wrapped `on_update` callbacks in try/except to prevent Home Assistant sensor update errors from disconnecting the WebSocket client.
+
+- **Thermal Warning Null Check** - Fixed thermal warning check using `is not None` instead of truthy evaluation. Previously, CPU temp of exactly 0°C would incorrectly skip the warning check.
+
+- **HTTP Session Management** - Implemented connection pooling by reusing aiohttp ClientSession instead of creating a new session per request. Session is now properly closed on disconnect.
+
+- **Public API for HTTP Status** - Changed `_fetch_http_status()` to public `fetch_http_status()` method. Private name kept as alias for backward compatibility.
+
+- **Web-888 Device Detection** - Changed device validation logic from AND to OR - now requires BOTH `offline=` and `users=` fields to be present (stricter validation prevents non-Web-888 devices from being added).
+
+- **Config Drain Loop Timeout** - Added 5-second overall timeout for the initial WebSocket config message drain loop. Previously, slow connections could hang for up to 6 seconds.
+
+- **Timeout Constants** - Replaced hardcoded timeout values with named constants (`HTTP_TIMEOUT`, `WS_PING_INTERVAL`, `WS_PING_TIMEOUT`, `WS_CLOSE_TIMEOUT`, `CONFIG_DRAIN_TIMEOUT`) for maintainability.
+
+- **Satellite Sensor Availability** - Fixed satellite sensors showing as "unavailable" when fewer than 12 satellites are tracked. Array is now padded to MAX_SATELLITES (12) with placeholder entries for untracked slots. Added `tracked` attribute to distinguish active satellites.
+
+### Added
+
+- **MAC Address Auto-Discovery** - Automatically discovers MAC address, serial number, and hardware DNA from WebSocket `config_cb` message when admin mode is connected. No manual MAC entry needed for device registry linking. Falls back to user-provided MAC if auto-discovery unavailable.
+
+- **New Diagnostic Sensors** (WebSocket only):
+  - **Sequence Errors** - Sequence error counter from device stats
+  - **Realtime Errors** - Realtime error counter from device stats
+  - **Total Session Hours** - Combined runtime of all active channels (hours)
+  - **Preemptible Channels** - Count of channels that can be preempted by users
+
+- **Enhanced Channel Attributes** - Per-channel sensors now include:
+  - `session_time` - Channel runtime in HH:MM:SS format (e.g., "518:00:56")
+  - `session_seconds` - Channel runtime in seconds (for automations)
+  - `preemptible` - Whether the channel can be preempted by users
+
 ## [1.2.0] - 2026-01-25
 
 ### Added
@@ -40,7 +88,7 @@ All device configuration is now parsed from WebSocket `load_cfg` and `load_adm` 
 - **Owner Info** - Owner contact email
 - **Admin Email** - Admin contact email
 
-##### Feature Flag Binary Sensors (Config Category)
+##### Feature Flag Binary Sensors (Diagnostic Category)
 - **GPS Enabled** - Whether GPS is enabled
 - **GPS Correction** - GPS frequency correction enabled
 - **DRM Enabled** - Digital Radio Mondiale extension enabled

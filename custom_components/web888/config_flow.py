@@ -74,8 +74,9 @@ async def test_connection(host: str, port: int, password: str = "") -> tuple[boo
                 if resp.status != 200:
                     return False, "cannot_connect"
                 # Parse status to verify it's a Web-888
+                # v1.2.1: Use OR - require BOTH fields present (stricter validation)
                 text = await resp.text()
-                if "offline=" not in text.lower() and "users=" not in text.lower():
+                if "offline=" not in text.lower() or "users=" not in text.lower():
                     return False, "not_web888"
     except asyncio.TimeoutError:
         return False, "timeout"
@@ -97,7 +98,9 @@ async def test_connection(host: str, port: int, password: str = "") -> tuple[boo
         except asyncio.TimeoutError:
             return False, "timeout"
         except ImportError:
-            _LOGGER.warning("Could not import web888_client for auth test, skipping")
+            # v1.2.1: If client module fails to import, we can't validate auth
+            _LOGGER.error("Could not import web888_client for auth test")
+            return False, "unknown"
         except Exception:  # noqa: BLE001
             return False, "invalid_auth"
 

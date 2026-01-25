@@ -2,6 +2,7 @@
 # Compact overview of key metrics
 #
 # Replace "web888" with your device's entity ID prefix if different
+# Updated for v1.2.1
 
 type: glance
 title: Web-888 SDR
@@ -19,9 +20,9 @@ entities:
     name: Decodes
   - entity: binary_sensor.web888_gps_lock
     name: GPS
-  - entity: sensor.web888_gps_satellites
+  - entity: sensor.web888_gps_in_solution
     name: Sats
-  - entity: sensor.web888_grid_square
-    name: Grid
+  - entity: sensor.web888_snr_hf
+    name: SNR HF
   - entity: sensor.web888_uptime
     name: Uptime
