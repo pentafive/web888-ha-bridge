@@ -158,6 +158,15 @@ class MQTTPublisher:
                 "unit_of_measurement": "users",
             },
             {
+                "name": "Users Max",
+                "unique_id": f"{device_id}_users_max",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.users_max }}",
+                "icon": "mdi:account-multiple-outline",
+                "unit_of_measurement": "users",
+                "entity_category": "diagnostic",
+            },
+            {
                 "name": "Uptime",
                 "unique_id": f"{device_id}_uptime",
                 "state_topic": f"web888/{device_id}/status",
@@ -170,6 +179,83 @@ class MQTTPublisher:
                 "state_topic": f"web888/{device_id}/status",
                 "value_template": "{{ value_json.gps_fixes }}",
                 "icon": "mdi:satellite-variant",
+            },
+            {
+                "name": "GPS Good Satellites",
+                "unique_id": f"{device_id}_gps_good",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.gps_good }}",
+                "icon": "mdi:satellite-variant",
+                "unit_of_measurement": "satellites",
+            },
+            {
+                "name": "Altitude",
+                "unique_id": f"{device_id}_altitude",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.altitude }}",
+                "icon": "mdi:altimeter",
+                "unit_of_measurement": "m",
+                "device_class": "distance",
+                "entity_category": "diagnostic",
+            },
+            {
+                "name": "SNR All Bands",
+                "unique_id": f"{device_id}_snr_all",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.snr_all }}",
+                "icon": "mdi:signal",
+                "unit_of_measurement": "dB",
+                "device_class": "signal_strength",
+            },
+            {
+                "name": "SNR HF",
+                "unique_id": f"{device_id}_snr_hf",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.snr_hf }}",
+                "icon": "mdi:signal",
+                "unit_of_measurement": "dB",
+                "device_class": "signal_strength",
+            },
+            {
+                "name": "Frequency Bands",
+                "unique_id": f"{device_id}_bands",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.bands }}",
+                "icon": "mdi:radio-tower",
+                "entity_category": "diagnostic",
+            },
+            {
+                "name": "Device Status",
+                "unique_id": f"{device_id}_device_status",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.device_status }}",
+                "icon": "mdi:shield-check",
+                "entity_category": "diagnostic",
+            },
+            {
+                "name": "ADC Overflow Count",
+                "unique_id": f"{device_id}_adc_overflow",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.adc_overflow }}",
+                "icon": "mdi:chart-bell-curve",
+                "unit_of_measurement": "overflows",
+                "entity_category": "diagnostic",
+            },
+            {
+                "name": "GPS Latitude",
+                "unique_id": f"{device_id}_gps_lat",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.gps_lat }}",
+                "icon": "mdi:latitude",
+                "entity_category": "diagnostic",
+            },
+            {
+                "name": "GPS Longitude",
+                "unique_id": f"{device_id}_gps_lon",
+                "state_topic": f"web888/{device_id}/status",
+                "value_template": "{{ value_json.gps_lon }}",
+                "icon": "mdi:longitude",
+                "entity_category": "diagnostic",
             },
         ]
 
@@ -191,22 +277,6 @@ class MQTTPublisher:
                     "state_topic": f"web888/{device_id}/status",
                     "value_template": "{{ value_json.grid }}",
                     "icon": "mdi:map-marker-radius",
-                },
-                {
-                    "name": "GPS Latitude",
-                    "unique_id": f"{device_id}_gps_lat",
-                    "state_topic": f"web888/{device_id}/status",
-                    "value_template": "{{ value_json.gps_lat }}",
-                    "icon": "mdi:latitude",
-                    "entity_category": "diagnostic",
-                },
-                {
-                    "name": "GPS Longitude",
-                    "unique_id": f"{device_id}_gps_lon",
-                    "state_topic": f"web888/{device_id}/status",
-                    "value_template": "{{ value_json.gps_lon }}",
-                    "icon": "mdi:longitude",
-                    "entity_category": "diagnostic",
                 },
                 {
                     "name": "GPS Satellites",
@@ -275,6 +345,40 @@ class MQTTPublisher:
             retain=True,
         )
 
+        # Antenna connected binary sensor
+        antenna_config = {
+            "name": "Antenna Connected",
+            "unique_id": f"{device_id}_antenna_connected",
+            "state_topic": f"web888/{device_id}/status",
+            "value_template": "{{ value_json.antenna_connected }}",
+            "device_class": "plug",
+            "payload_on": "true",
+            "payload_off": "false",
+            "device": device_info,
+        }
+        self.client.publish(
+            f"homeassistant/binary_sensor/{device_id}_antenna_connected/config",
+            json.dumps(antenna_config),
+            retain=True,
+        )
+
+        # Offline binary sensor
+        offline_config = {
+            "name": "Offline",
+            "unique_id": f"{device_id}_offline",
+            "state_topic": f"web888/{device_id}/status",
+            "value_template": "{{ value_json.offline }}",
+            "device_class": "problem",
+            "payload_on": "true",
+            "payload_off": "false",
+            "device": device_info,
+        }
+        self.client.publish(
+            f"homeassistant/binary_sensor/{device_id}_offline/config",
+            json.dumps(offline_config),
+            retain=True,
+        )
+
         logger.info(f"Published MQTT discovery for {device_name} ({mode} mode)")
 
     def publish_channel_discovery(self, device_id: str, device_info: dict, num_channels: int):
@@ -310,9 +414,24 @@ class MQTTPublisher:
                 config_topic = f"homeassistant/sensor/{sensor['unique_id']}/config"
                 self.client.publish(config_topic, json.dumps(sensor), retain=True)
 
+    @staticmethod
+    def _parse_snr(snr_str: str, index: int) -> float | None:
+        """Parse SNR string (format: 'all,hf' e.g. '24,23') and return indexed value."""
+        if not snr_str:
+            return None
+        try:
+            parts = snr_str.split(",")
+            if index < len(parts):
+                value = int(parts[index].strip())
+                # SNR of 0 means measurement disabled or not yet performed
+                return float(value) if value > 0 else None
+            return None
+        except (ValueError, IndexError):
+            return None
+
     def publish_status(self, device_id: str, status: Web888Status):
         """Publish status updates to MQTT."""
-        # Build status payload
+        # Build status payload with base sensors (HTTP compatible)
         payload = {
             "connected": str(status.connected).lower(),
             "users": status.users,
@@ -321,6 +440,17 @@ class MQTTPublisher:
             "uptime_seconds": status.uptime_seconds,
             "gps_lock": str(status.gps.fixes > 0).lower(),
             "gps_fixes": status.gps.fixes,
+            "gps_good": status.gps.good,
+            "altitude": status.gps.altitude_m,
+            "gps_lat": round(status.gps.latitude, 6) if status.gps.latitude else None,
+            "gps_lon": round(status.gps.longitude, 6) if status.gps.longitude else None,
+            "snr_all": self._parse_snr(status.snr, 0),
+            "snr_hf": self._parse_snr(status.snr, 1),
+            "bands": status.bands,
+            "device_status": status.status,
+            "adc_overflow": status.adc_overflow,
+            "antenna_connected": str(status.ant_connected).lower(),
+            "offline": str(status.offline).lower(),
             "name": status.name,
             "version": status.sw_version,
             "last_update": datetime.now(timezone.utc).isoformat(),
@@ -332,8 +462,6 @@ class MQTTPublisher:
                 "cpu_temp": status.system.cpu_temp_c,
                 "cpu_freq": status.system.cpu_freq_mhz,
                 "grid": status.gps.grid_square,
-                "gps_lat": round(status.gps.latitude, 6),
-                "gps_lon": round(status.gps.longitude, 6),
                 "gps_satellites": len(status.gps.satellites),
                 "audio_kbps": status.system.audio_kbps,
                 "total_decodes": sum(ch.decoded_count for ch in status.channels),

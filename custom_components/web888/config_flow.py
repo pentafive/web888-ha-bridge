@@ -20,17 +20,23 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_ENABLE_CHANNELS,
+    CONF_ENABLE_SATELLITES,
     CONF_HOST,
     CONF_MAC,
     CONF_MODE,
     CONF_PASSWORD,
+    CONF_PSKR_CALLSIGN,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
+    CONF_THERMAL_THRESHOLD,
     CONNECTION_TIMEOUT,
     DEFAULT_ENABLE_CHANNELS,
+    DEFAULT_ENABLE_SATELLITES,
     DEFAULT_MODE,
+    DEFAULT_PSKR_CALLSIGN,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_THERMAL_THRESHOLD,
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
@@ -161,9 +167,9 @@ class Web888ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    @staticmethod
+    @classmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+    def async_get_options_flow(cls, config_entry: ConfigEntry) -> OptionsFlow:
         """Get the options flow for this handler."""
         return Web888OptionsFlow(config_entry)
 
@@ -193,6 +199,19 @@ class Web888OptionsFlow(OptionsFlowWithConfigEntry):
                 CONF_ENABLE_CHANNELS,
                 entry.data.get(CONF_ENABLE_CHANNELS, DEFAULT_ENABLE_CHANNELS),
             ),
+            # v1.1.0: New options
+            CONF_ENABLE_SATELLITES: entry.options.get(
+                CONF_ENABLE_SATELLITES,
+                entry.data.get(CONF_ENABLE_SATELLITES, DEFAULT_ENABLE_SATELLITES),
+            ),
+            CONF_THERMAL_THRESHOLD: entry.options.get(
+                CONF_THERMAL_THRESHOLD,
+                entry.data.get(CONF_THERMAL_THRESHOLD, DEFAULT_THERMAL_THRESHOLD),
+            ),
+            CONF_PSKR_CALLSIGN: entry.options.get(
+                CONF_PSKR_CALLSIGN,
+                entry.data.get(CONF_PSKR_CALLSIGN, DEFAULT_PSKR_CALLSIGN),
+            ),
         }
 
         return self.async_show_form(
@@ -220,6 +239,24 @@ class Web888OptionsFlow(OptionsFlowWithConfigEntry):
                         CONF_ENABLE_CHANNELS,
                         default=current[CONF_ENABLE_CHANNELS],
                     ): bool,
+                    # v1.1.0: New options
+                    vol.Optional(
+                        CONF_ENABLE_SATELLITES,
+                        default=current[CONF_ENABLE_SATELLITES],
+                        description={"suggested_value": "Enable per-satellite sensors for security monitoring"},
+                    ): bool,
+                    vol.Optional(
+                        CONF_THERMAL_THRESHOLD,
+                        default=current[CONF_THERMAL_THRESHOLD],
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=50, max=100),
+                    ),
+                    vol.Optional(
+                        CONF_PSKR_CALLSIGN,
+                        default=current[CONF_PSKR_CALLSIGN],
+                        description={"suggested_value": "Callsign for PSKReporter correlation"},
+                    ): str,
                 }
             ),
         )

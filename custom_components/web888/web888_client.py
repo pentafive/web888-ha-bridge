@@ -56,6 +56,28 @@ class ChannelInfo:
     def frequency_khz(self) -> float:
         return self.frequency_hz / 1_000
 
+    @property
+    def is_extension(self) -> bool:
+        """True if this is an extension (FT8/WSPR/etc) not a real user."""
+        return bool(self.extension) or self.client_ip == "127.0.0.1"
+
+    @property
+    def channel_type(self) -> str:
+        """Return channel type: 'ft8', 'wspr', 'user', or 'idle'."""
+        if not self.client_ip:
+            return "idle"
+        ext_lower = self.extension.lower()
+        if ext_lower in ("ft8", "ft4"):
+            return "ft8"
+        elif ext_lower == "wspr":
+            return "wspr"
+        elif self.extension:
+            return self.extension.lower()
+        elif self.client_ip == "127.0.0.1":
+            return "local"
+        else:
+            return "user"
+
 
 @dataclass
 class GPSSatellite:
@@ -78,6 +100,7 @@ class GPSStatus:
     good: int = 0
     fixes: int = 0
     fixes_per_min: int = 0
+    fixes_per_hour: int = 0  # v1.1.0: GPS fixes per hour from HTTP /status
     latitude: float = 0.0
     longitude: float = 0.0
     altitude_m: int = 0
@@ -103,6 +126,17 @@ class SystemStats:
 
 
 @dataclass
+class ReporterConfig:
+    """FT8/WSPR reporter configuration (from WebSocket cfg)."""
+    callsign: str = ""
+    grid: str = ""
+    snr_correction: int = 0
+    dt_correction: int = 0
+    # Autorun slots: list of {enabled, mode, band}
+    autorun: list = field(default_factory=list)
+
+
+@dataclass
 class Web888Status:
     """Complete status from Web-888 SDR."""
     # Connection info
@@ -121,11 +155,16 @@ class Web888Status:
     users_max: int = 0
     status: str = ""  # private/public
     offline: bool = False
+    op_email: str = ""
 
     # Antenna/ADC
     ant_connected: bool = False
     adc_overflow: int = 0
     snr: str = ""
+
+    # v1.1.0: Additional HTTP /status fields
+    sdr_hw: str = ""  # Hardware description (e.g., "KiwiSDR v2024.1130")
+    freq_offset: float = 0.0  # Frequency calibration offset in Hz
 
     # GPS (basic in HTTP, detailed in WebSocket)
     gps: GPSStatus = field(default_factory=GPSStatus)
@@ -133,6 +172,7 @@ class Web888Status:
     # WebSocket-only data
     system: SystemStats = field(default_factory=SystemStats)
     channels: list = field(default_factory=list)  # List[ChannelInfo]
+    reporter: ReporterConfig = field(default_factory=ReporterConfig)  # FT8/WSPR config
 
     @property
     def uptime_formatted(self) -> str:
@@ -322,6 +362,15 @@ class Web888Client:
                     self.status.gps.fixes_per_min = int(value)
                 elif key == "asl":
                     self.status.gps.altitude_m = int(value)
+                elif key == "op_email":
+                    self.status.op_email = value
+                # v1.1.0: Additional HTTP /status fields
+                elif key == "sdr_hw":
+                    self.status.sdr_hw = value
+                elif key == "freq_offset":
+                    self.status.freq_offset = float(value)
+                elif key == "fixes_hour":
+                    self.status.gps.fixes_per_hour = int(value)
             except (ValueError, IndexError) as e:
                 logger.debug(f"Parse error for {key}={value}: {e}")
 
@@ -359,11 +408,21 @@ class Web888Client:
                             logger.error(f"Authentication failed: {text}")
                             return False
 
+                    # v1.1.0: Parse cfg messages for reporter config
+                    if "MSG cfg=" in text:
+                        self._parse_cfg_message(text)
+
                     # Stop draining after config is loaded
                     if "cfg_loaded" in text:
                         break
                 except asyncio.TimeoutError:
                     break
+
+            # v1.1.0 Hybrid mode: fetch HTTP /status for device metadata
+            # (name, location, version, antenna, bands, sdr_hw, etc.)
+            # WebSocket doesn't provide this info, only stats_cb/user_cb
+            logger.debug("Fetching HTTP /status for device metadata (hybrid mode)")
+            await self._fetch_http_status()
 
             # Start receive loop and poll loop
             self._running = True
@@ -383,12 +442,16 @@ class Web888Client:
         """Periodically request status updates via WebSocket."""
         while self._running and self._ws:
             try:
-                # Request stats and users
+                # Request stats and users via WebSocket
                 await self._ws.send("SET STATS_UPD ch=0")
                 await asyncio.sleep(0.5)
                 await self._ws.send("SET GET_USERS")
                 await asyncio.sleep(0.5)
                 await self._ws.send("SET gps_update")
+
+                # v1.1.0 Hybrid mode: also fetch HTTP /status to refresh
+                # HTTP-only data (snr, fixes_min, fixes_hour, etc.)
+                await self._fetch_http_status()
 
                 await asyncio.sleep(self.poll_interval)
             except asyncio.CancelledError:
@@ -400,6 +463,8 @@ class Web888Client:
 
     async def _ws_receive_loop(self):
         """Process incoming WebSocket messages."""
+        import websockets
+
         try:
             async for message in self._ws:
                 if isinstance(message, bytes):
@@ -410,9 +475,18 @@ class Web888Client:
                         self.on_update(self.status)
 
         except asyncio.CancelledError:
-            pass
+            logger.debug("WebSocket receive loop cancelled")
+        except websockets.exceptions.ConnectionClosedError as e:
+            # v1.1.0: Specific handling for WebSocket close errors
+            logger.warning(f"WebSocket closed unexpectedly: code={e.code} reason={e.reason}")
+            self.status.connected = False
+        except websockets.exceptions.ConnectionClosedOK:
+            # Normal close - not an error
+            logger.debug("WebSocket closed normally")
+            self.status.connected = False
         except Exception as e:
-            logger.error(f"WebSocket receive error: {e}")
+            # Generic fallback - log full error for debugging
+            logger.error(f"WebSocket receive error: {type(e).__name__}: {e}")
             self.status.connected = False
 
     def _parse_ws_message(self, data: bytes):
@@ -542,6 +616,89 @@ class Web888Client:
 
         except json.JSONDecodeError as e:
             logger.debug(f"gps_POS_data_cb JSON error: {e}")
+
+    def _parse_cfg_message(self, text: str):
+        """Parse MSG cfg= message for FT8/WSPR reporter config.
+
+        KiwiSDR sends config during auth handshake. We extract:
+        - Reporter callsign and grid square
+        - SNR/dT corrections
+        - Autorun slot configuration (which channels run FT8/WSPR)
+        """
+        try:
+            # Extract JSON from MSG cfg=...
+            if "MSG cfg=" not in text:
+                return
+
+            cfg_start = text.find("MSG cfg=") + len("MSG cfg=")
+            cfg_json = text[cfg_start:].strip()
+
+            # URL decode if needed
+            cfg_json = unquote(cfg_json)
+
+            data = json.loads(cfg_json)
+
+            # FT8/WSPR extension config keys (from KiwiSDR source patterns):
+            # "FT8.callsign", "FT8.grid", "FT8.SNR_correction", "FT8.dT_correction"
+            # "wspr.callsign", "wspr.grid", "wspr.autorun" etc.
+            # Or may be nested under "ext" key
+
+            # Try top-level FT8/wspr keys first
+            callsign = ""
+            grid = ""
+            snr_corr = 0
+            dt_corr = 0
+
+            # Check for FT8 config (takes precedence as it's PSKReporter)
+            if "FT8" in data:
+                ft8_cfg = data["FT8"]
+                callsign = ft8_cfg.get("callsign", "")
+                grid = ft8_cfg.get("grid", "")
+                snr_corr = ft8_cfg.get("SNR_correction", ft8_cfg.get("snr_correction", 0))
+                dt_corr = ft8_cfg.get("dT_correction", ft8_cfg.get("dt_correction", 0))
+            # Fallback to wspr config
+            elif "wspr" in data:
+                wspr_cfg = data["wspr"]
+                callsign = wspr_cfg.get("callsign", "")
+                grid = wspr_cfg.get("grid", "")
+                snr_corr = wspr_cfg.get("SNR_correction", wspr_cfg.get("snr_correction", 0))
+                dt_corr = wspr_cfg.get("dT_correction", wspr_cfg.get("dt_correction", 0))
+            # Try flat keys (some KiwiSDR versions)
+            else:
+                callsign = data.get("reporter_callsign", data.get("callsign", ""))
+                grid = data.get("reporter_grid", data.get("grid", ""))
+                snr_corr = data.get("SNR_correction", 0)
+                dt_corr = data.get("dT_correction", 0)
+
+            if callsign:
+                self.status.reporter.callsign = callsign
+                logger.debug(f"Parsed reporter callsign: {callsign}")
+            if grid:
+                self.status.reporter.grid = grid
+                logger.debug(f"Parsed reporter grid: {grid}")
+
+            self.status.reporter.snr_correction = int(snr_corr) if snr_corr else 0
+            self.status.reporter.dt_correction = int(dt_corr) if dt_corr else 0
+
+            # Parse autorun configuration if present
+            # Format varies: could be autorun[0-11] or autorun array
+            autorun = []
+            for i in range(12):
+                key = f"autorun{i}"
+                if key in data:
+                    autorun.append(data[key])
+                elif "autorun" in data and isinstance(data["autorun"], list):
+                    if i < len(data["autorun"]):
+                        autorun.append(data["autorun"][i])
+
+            if autorun:
+                self.status.reporter.autorun = autorun
+                logger.debug(f"Parsed autorun config: {len(autorun)} slots")
+
+        except json.JSONDecodeError as e:
+            logger.debug(f"cfg JSON parse error: {e}")
+        except Exception as e:
+            logger.debug(f"cfg parse error: {e}")
 
 
 # ========== CLI Testing ==========

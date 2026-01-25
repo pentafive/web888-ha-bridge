@@ -121,6 +121,7 @@ class Web888Status:
     users_max: int = 0
     status: str = ""  # private/public
     offline: bool = False
+    op_email: str = ""
 
     # Antenna/ADC
     ant_connected: bool = False
@@ -322,6 +323,8 @@ class Web888Client:
                     self.status.gps.fixes_per_min = int(value)
                 elif key == "asl":
                     self.status.gps.altitude_m = int(value)
+                elif key == "op_email":
+                    self.status.op_email = value
             except (ValueError, IndexError) as e:
                 logger.debug(f"Parse error for {key}={value}: {e}")
 

@@ -51,6 +51,9 @@
       "users": {
         "name": "Users"
       },
+      "users_max": {
+        "name": "Users Max"
+      },
       "uptime": {
         "name": "Uptime"
       },
@@ -77,6 +80,27 @@
       },
       "audio_bandwidth": {
         "name": "Audio Bandwidth"
+      },
+      "snr_all": {
+        "name": "SNR All Bands"
+      },
+      "snr_hf": {
+        "name": "SNR HF"
+      },
+      "gps_good": {
+        "name": "GPS Good Satellites"
+      },
+      "altitude": {
+        "name": "Altitude"
+      },
+      "bands": {
+        "name": "Frequency Bands"
+      },
+      "device_status": {
+        "name": "Device Status"
+      },
+      "adc_overflow": {
+        "name": "ADC Overflow Count"
       }
     },
     "binary_sensor": {
@@ -85,6 +109,12 @@
       },
       "gps_lock": {
         "name": "GPS Lock"
+      },
+      "antenna_connected": {
+        "name": "Antenna Connected"
+      },
+      "offline": {
+        "name": "Offline"
       }
     }
   }

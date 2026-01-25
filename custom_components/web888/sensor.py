@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     EntityCategory,
+    UnitOfDataRate,
     UnitOfFrequency,
     UnitOfTemperature,
     UnitOfTime,
@@ -24,8 +25,11 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     CONF_ENABLE_CHANNELS,
+    CONF_ENABLE_SATELLITES,
     DEFAULT_ENABLE_CHANNELS,
+    DEFAULT_ENABLE_SATELLITES,
     DOMAIN,
+    MAX_SATELLITES,
     MODE_HTTP,
     NUM_CHANNELS,
 )
@@ -50,6 +54,15 @@ SENSOR_DESCRIPTIONS: tuple[Web888SensorEntityDescription, ...] = (
         icon="mdi:account-multiple",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn="users",
+    ),
+    Web888SensorEntityDescription(
+        key="users_max",
+        translation_key="users_max",
+        name="Users Max",
+        native_unit_of_measurement="users",
+        icon="mdi:account-multiple-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn="users_max",
     ),
     Web888SensorEntityDescription(
         key="uptime",
@@ -108,7 +121,6 @@ SENSOR_DESCRIPTIONS: tuple[Web888SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn="latitude",
-        websocket_only=True,
     ),
     Web888SensorEntityDescription(
         key="longitude",
@@ -119,7 +131,6 @@ SENSOR_DESCRIPTIONS: tuple[Web888SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn="longitude",
-        websocket_only=True,
     ),
     Web888SensorEntityDescription(
         key="total_decodes",
@@ -140,6 +151,297 @@ SENSOR_DESCRIPTIONS: tuple[Web888SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn="audio_bandwidth",
+        websocket_only=True,
+    ),
+    # New sensors from /status endpoint (HTTP compatible)
+    Web888SensorEntityDescription(
+        key="snr_all",
+        translation_key="snr_all",
+        name="SNR All Bands",
+        native_unit_of_measurement="dB",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:signal",
+        value_fn="snr_all",
+    ),
+    Web888SensorEntityDescription(
+        key="snr_hf",
+        translation_key="snr_hf",
+        name="SNR HF",
+        native_unit_of_measurement="dB",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:signal",
+        value_fn="snr_hf",
+    ),
+    Web888SensorEntityDescription(
+        key="gps_good",
+        translation_key="gps_good",
+        name="GPS Good Satellites",
+        native_unit_of_measurement="satellites",
+        icon="mdi:satellite-variant",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="gps_good",
+    ),
+    Web888SensorEntityDescription(
+        key="altitude",
+        translation_key="altitude",
+        name="Altitude",
+        native_unit_of_measurement="m",
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:altimeter",
+        value_fn="altitude",
+    ),
+    Web888SensorEntityDescription(
+        key="bands",
+        translation_key="bands",
+        name="Frequency Bands",
+        icon="mdi:radio-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn="bands",
+    ),
+    Web888SensorEntityDescription(
+        key="device_status",
+        translation_key="device_status",
+        name="Device Status",
+        icon="mdi:shield-check",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn="device_status",
+    ),
+    Web888SensorEntityDescription(
+        key="adc_overflow",
+        translation_key="adc_overflow",
+        name="ADC Overflow Count",
+        native_unit_of_measurement="overflows",
+        icon="mdi:chart-bell-curve",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn="adc_overflow",
+    ),
+    # v1.1.0: Additional CPU/System sensors (WebSocket only)
+    Web888SensorEntityDescription(
+        key="cpu_freq",
+        translation_key="cpu_freq",
+        name="CPU Frequency",
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chip",
+        value_fn="cpu_freq_mhz",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="cpu_usage",
+        translation_key="cpu_usage",
+        name="CPU Usage",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:cpu-64-bit",
+        value_fn="cpu_usage_avg",
+        websocket_only=True,
+    ),
+    # v1.1.0: Bandwidth sensors (WebSocket only)
+    Web888SensorEntityDescription(
+        key="waterfall_bandwidth",
+        translation_key="waterfall_bandwidth",
+        name="Waterfall Bandwidth",
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:chart-waterfall",
+        value_fn="waterfall_bandwidth",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="http_bandwidth",
+        translation_key="http_bandwidth",
+        name="HTTP Bandwidth",
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:web",
+        value_fn="http_bandwidth",
+        websocket_only=True,
+    ),
+    # v1.1.0: Audio diagnostics (WebSocket only)
+    Web888SensorEntityDescription(
+        key="audio_dropped",
+        translation_key="audio_dropped",
+        name="Audio Dropped",
+        native_unit_of_measurement="packets",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:speaker-off",
+        value_fn="audio_dropped",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="audio_underruns",
+        translation_key="audio_underruns",
+        name="Audio Underruns",
+        native_unit_of_measurement="events",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:speedometer-slow",
+        value_fn="audio_underruns",
+        websocket_only=True,
+    ),
+    # v1.1.0: Extended GPS sensors (WebSocket only)
+    Web888SensorEntityDescription(
+        key="gps_tracking",
+        translation_key="gps_tracking",
+        name="GPS Tracking",
+        native_unit_of_measurement="satellites",
+        icon="mdi:satellite-uplink",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="gps_tracking",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="gps_in_solution",
+        translation_key="gps_in_solution",
+        name="GPS In Solution",
+        native_unit_of_measurement="satellites",
+        icon="mdi:satellite-variant",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="gps_in_solution",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="gps_avg_snr",
+        translation_key="gps_avg_snr",
+        name="GPS Avg SNR",
+        native_unit_of_measurement="dB",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:signal",
+        value_fn="gps_avg_snr",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="adc_clock",
+        translation_key="adc_clock",
+        name="ADC Clock",
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:clock-digital",
+        value_fn="adc_clock_mhz",
+        websocket_only=True,
+    ),
+    # v1.1.0: HTTP /status fields (available in both modes)
+    Web888SensorEntityDescription(
+        key="gps_fixes_per_min",
+        translation_key="gps_fixes_per_min",
+        name="GPS Fixes/min",
+        native_unit_of_measurement="fixes/min",
+        icon="mdi:crosshairs-gps",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="gps_fixes_per_min",
+    ),
+    Web888SensorEntityDescription(
+        key="gps_fixes_per_hour",
+        translation_key="gps_fixes_per_hour",
+        name="GPS Fixes/hour",
+        native_unit_of_measurement="fixes/hour",
+        icon="mdi:crosshairs-gps",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="gps_fixes_per_hour",
+    ),
+    Web888SensorEntityDescription(
+        key="freq_offset",
+        translation_key="freq_offset",
+        name="Frequency Offset",
+        native_unit_of_measurement="Hz",
+        device_class=SensorDeviceClass.FREQUENCY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:tune-vertical",
+        value_fn="freq_offset",
+    ),
+    # v1.1.0: Reporter config (auto-discovered from WebSocket cfg)
+    Web888SensorEntityDescription(
+        key="reporter_callsign",
+        translation_key="reporter_callsign",
+        name="Reporter Callsign",
+        icon="mdi:account-badge",
+        value_fn="reporter_callsign",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="reporter_grid",
+        translation_key="reporter_grid",
+        name="Reporter Grid",
+        icon="mdi:grid",
+        value_fn="reporter_grid",
+        websocket_only=True,
+    ),
+    # v1.1.0: Channel type counts (WebSocket only)
+    Web888SensorEntityDescription(
+        key="ft8_channels",
+        translation_key="ft8_channels",
+        name="FT8 Channels",
+        native_unit_of_measurement="channels",
+        icon="mdi:radio-tower",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="ft8_channels",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="wspr_channels",
+        translation_key="wspr_channels",
+        name="WSPR Channels",
+        native_unit_of_measurement="channels",
+        icon="mdi:broadcast",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="wspr_channels",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="user_channels",
+        translation_key="user_channels",
+        name="User Channels",
+        native_unit_of_measurement="channels",
+        icon="mdi:account-multiple",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="user_channels",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="idle_channels",
+        translation_key="idle_channels",
+        name="Idle Channels",
+        native_unit_of_measurement="channels",
+        icon="mdi:sleep",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn="idle_channels",
+        websocket_only=True,
+    ),
+    # v1.1.0: Per-mode decode totals (WebSocket only)
+    Web888SensorEntityDescription(
+        key="ft8_total_decodes",
+        translation_key="ft8_total_decodes",
+        name="FT8 Total Decodes",
+        native_unit_of_measurement="decodes",
+        icon="mdi:radio-tower",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn="ft8_total_decodes",
+        websocket_only=True,
+    ),
+    Web888SensorEntityDescription(
+        key="wspr_total_decodes",
+        translation_key="wspr_total_decodes",
+        name="WSPR Total Decodes",
+        native_unit_of_measurement="decodes",
+        icon="mdi:broadcast",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value_fn="wspr_total_decodes",
         websocket_only=True,
     ),
 )
@@ -174,6 +476,21 @@ async def async_setup_entry(
                 entities.append(Web888ChannelFrequencySensor(coordinator, i))
                 entities.append(Web888ChannelModeSensor(coordinator, i))
                 entities.append(Web888ChannelDecodedSensor(coordinator, i))
+
+    # v1.1.0: Add per-satellite sensors if enabled (WebSocket mode only)
+    if not is_http_mode:
+        enable_satellites = entry.options.get(
+            CONF_ENABLE_SATELLITES,
+            entry.data.get(CONF_ENABLE_SATELLITES, DEFAULT_ENABLE_SATELLITES),
+        )
+
+        if enable_satellites:
+            for i in range(MAX_SATELLITES):
+                entities.append(Web888SatelliteSNRSensor(coordinator, i))
+                entities.append(Web888SatelliteRSSISensor(coordinator, i))
+                entities.append(Web888SatelliteAzimuthSensor(coordinator, i))
+                entities.append(Web888SatelliteElevationSensor(coordinator, i))
+                entities.append(Web888SatelliteInSolutionSensor(coordinator, i))
 
     async_add_entities(entities)
 
@@ -266,6 +583,11 @@ class Web888ChannelFrequencySensor(Web888ChannelSensorBase):
             "frequency_mhz": round(freq_hz / 1_000_000, 4) if freq_hz else 0,
             "channel_name": channel.get("name", ""),
             "active": channel.get("active", False),
+            # v1.1.0: Channel type info
+            "channel_type": channel.get("channel_type", ""),
+            "extension": channel.get("extension", ""),
+            "is_extension": channel.get("is_extension", False),
+            "client_ip": channel.get("client_ip", ""),
         }
 
 
@@ -293,6 +615,19 @@ class Web888ChannelModeSensor(Web888ChannelSensorBase):
         mode = channel.get("mode", "")
         return mode.upper() if mode else "Idle"
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        channel = self._get_channel_data()
+        if channel is None:
+            return {}
+        return {
+            # v1.1.0: Channel type info
+            "channel_type": channel.get("channel_type", ""),
+            "extension": channel.get("extension", ""),
+            "is_extension": channel.get("is_extension", False),
+        }
+
 
 class Web888ChannelDecodedSensor(Web888ChannelSensorBase):
     """Sensor for channel decoded count."""
@@ -318,3 +653,187 @@ class Web888ChannelDecodedSensor(Web888ChannelSensorBase):
         if channel is None:
             return None
         return channel.get("decoded_count", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        channel = self._get_channel_data()
+        if channel is None:
+            return {}
+        return {
+            # v1.1.0: Channel type info (useful for knowing if FT8/WSPR decode)
+            "channel_type": channel.get("channel_type", ""),
+            "extension": channel.get("extension", ""),
+            "is_extension": channel.get("is_extension", False),
+        }
+
+
+# v1.1.0: Per-satellite sensors for security monitoring
+class Web888SatelliteSensorBase(CoordinatorEntity[Web888Coordinator], SensorEntity):
+    """Base class for per-satellite sensors."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite sensor."""
+        super().__init__(coordinator)
+        self._satellite_index = satellite_index
+        self._attr_device_info = coordinator.device_info
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def _get_satellite_data(self) -> dict[str, Any] | None:
+        """Get data for this satellite."""
+        if self.coordinator.data is None:
+            return None
+        satellites = self.coordinator.data.get("satellites", [])
+        if self._satellite_index < len(satellites):
+            return satellites[self._satellite_index]
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        # Satellite sensor is only available if we have data for this slot
+        return self._get_satellite_data() is not None
+
+
+class Web888SatelliteSNRSensor(Web888SatelliteSensorBase):
+    """Sensor for satellite SNR - security monitoring for interference detection."""
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite SNR sensor."""
+        super().__init__(coordinator, satellite_index)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_sat_{satellite_index}_snr"
+        self._attr_name = f"Satellite {satellite_index} SNR"
+        self._attr_native_unit_of_measurement = "dB"
+        self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:satellite-variant"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the satellite SNR."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return None
+        return sat.get("snr", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return {}
+        return {
+            "system": sat.get("system", ""),
+            "prn": sat.get("prn", 0),
+            "channel": sat.get("channel", 0),
+            "in_solution": sat.get("in_solution", False),
+        }
+
+
+class Web888SatelliteRSSISensor(Web888SatelliteSensorBase):
+    """Sensor for satellite RSSI."""
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite RSSI sensor."""
+        super().__init__(coordinator, satellite_index)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_sat_{satellite_index}_rssi"
+        self._attr_name = f"Satellite {satellite_index} RSSI"
+        self._attr_native_unit_of_measurement = "dBm"
+        self._attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:signal-cellular-3"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the satellite RSSI."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return None
+        return sat.get("rssi", 0)
+
+
+class Web888SatelliteAzimuthSensor(Web888SatelliteSensorBase):
+    """Sensor for satellite azimuth - useful for LOS analysis."""
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite azimuth sensor."""
+        super().__init__(coordinator, satellite_index)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_sat_{satellite_index}_azimuth"
+        self._attr_name = f"Satellite {satellite_index} Azimuth"
+        self._attr_native_unit_of_measurement = "°"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:compass"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the satellite azimuth."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return None
+        return sat.get("azimuth", 0)
+
+
+class Web888SatelliteElevationSensor(Web888SatelliteSensorBase):
+    """Sensor for satellite elevation - useful for LOS analysis."""
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite elevation sensor."""
+        super().__init__(coordinator, satellite_index)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_sat_{satellite_index}_elevation"
+        self._attr_name = f"Satellite {satellite_index} Elevation"
+        self._attr_native_unit_of_measurement = "°"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:angle-acute"
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the satellite elevation."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return None
+        return sat.get("elevation", 0)
+
+
+class Web888SatelliteInSolutionSensor(Web888SatelliteSensorBase):
+    """Sensor for whether satellite is in position solution."""
+
+    def __init__(
+        self,
+        coordinator: Web888Coordinator,
+        satellite_index: int,
+    ) -> None:
+        """Initialize the satellite in-solution sensor."""
+        super().__init__(coordinator, satellite_index)
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_sat_{satellite_index}_in_solution"
+        self._attr_name = f"Satellite {satellite_index} In Solution"
+        self._attr_icon = "mdi:check-circle"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return whether satellite is in solution."""
+        sat = self._get_satellite_data()
+        if sat is None:
+            return None
+        return "Yes" if sat.get("in_solution", False) else "No"

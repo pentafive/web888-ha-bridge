@@ -13,18 +13,25 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_ENABLE_CHANNELS,
+    CONF_ENABLE_SATELLITES,
     CONF_HOST,
     CONF_MAC,
     CONF_MODE,
     CONF_PASSWORD,
+    CONF_PSKR_CALLSIGN,
     CONF_PORT,
     CONF_SCAN_INTERVAL,
+    CONF_THERMAL_THRESHOLD,
     CONNECTION_TIMEOUT,
     DEFAULT_ENABLE_CHANNELS,
+    DEFAULT_ENABLE_SATELLITES,
     DEFAULT_MODE,
+    DEFAULT_PSKR_CALLSIGN,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_THERMAL_THRESHOLD,
     DOMAIN,
+    MAX_SATELLITES,
     MODE_AUTO,
     MODE_HTTP,
     MODE_WEBSOCKET,
@@ -48,6 +55,20 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.enable_channels = entry.options.get(
             CONF_ENABLE_CHANNELS,
             entry.data.get(CONF_ENABLE_CHANNELS, DEFAULT_ENABLE_CHANNELS),
+        )
+
+        # v1.1.0: New options
+        self.enable_satellites = entry.options.get(
+            CONF_ENABLE_SATELLITES,
+            entry.data.get(CONF_ENABLE_SATELLITES, DEFAULT_ENABLE_SATELLITES),
+        )
+        self.thermal_threshold = entry.options.get(
+            CONF_THERMAL_THRESHOLD,
+            entry.data.get(CONF_THERMAL_THRESHOLD, DEFAULT_THERMAL_THRESHOLD),
+        )
+        self.pskr_callsign = entry.options.get(
+            CONF_PSKR_CALLSIGN,
+            entry.data.get(CONF_PSKR_CALLSIGN, DEFAULT_PSKR_CALLSIGN),
         )
 
         # Determine connection mode
@@ -110,6 +131,21 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return info
 
+    @staticmethod
+    def _parse_snr(snr_str: str, index: int) -> float | None:
+        """Parse SNR string (format: 'all,hf' e.g. '24,23') and return indexed value."""
+        if not snr_str:
+            return None
+        try:
+            parts = snr_str.split(",")
+            if index < len(parts):
+                value = int(parts[index].strip())
+                # SNR of 0 means measurement disabled or not yet performed
+                return float(value) if value > 0 else None
+            return None
+        except (ValueError, IndexError):
+            return None
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from Web-888 SDR."""
         try:
@@ -155,8 +191,9 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "gps_lock": status.gps.fixes > 0,  # Lock = has received fixes
                 "grid_square": status.gps.grid_square or (None if self.mode == MODE_HTTP else ""),
-                "latitude": status.gps.latitude or (None if self.mode == MODE_HTTP else 0.0),
-                "longitude": status.gps.longitude or (None if self.mode == MODE_HTTP else 0.0),
+                # lat/lon available in both modes (HTTP parses from gps= field)
+                "latitude": status.gps.latitude if status.gps.latitude else None,
+                "longitude": status.gps.longitude if status.gps.longitude else None,
 
                 # WebSocket-only sensors (None in HTTP mode)
                 "cpu_temp_c": status.system.cpu_temp_c if self.mode != MODE_HTTP else None,
@@ -168,6 +205,99 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "total_decodes": (
                     sum(ch.decoded_count for ch in status.channels) if status.channels else 0
                 ) if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: Additional WebSocket-only sensors from admin data
+                "cpu_freq_mhz": status.system.cpu_freq_mhz if self.mode != MODE_HTTP else None,
+                "cpu_usage_avg": (
+                    sum(status.system.cpu_user_pct) / len(status.system.cpu_user_pct)
+                    if status.system.cpu_user_pct else None
+                ) if self.mode != MODE_HTTP else None,
+                "waterfall_bandwidth": (
+                    int(status.system.waterfall_kbps * 1000) if status.system.waterfall_kbps else 0
+                ) if self.mode != MODE_HTTP else None,
+                "http_bandwidth": (
+                    int(status.system.http_kbps * 1000) if status.system.http_kbps else 0
+                ) if self.mode != MODE_HTTP else None,
+                "audio_dropped": status.system.dropped if self.mode != MODE_HTTP else None,
+                "audio_underruns": status.system.underruns if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: Extended GPS sensors (WebSocket only)
+                "gps_acquiring": status.gps.acquiring if self.mode != MODE_HTTP else None,
+                "gps_tracking": status.gps.tracking if self.mode != MODE_HTTP else None,
+                "adc_clock_mhz": status.gps.adc_clock_mhz if self.mode != MODE_HTTP else None,
+                "gps_in_solution": (
+                    sum(1 for s in status.gps.satellites if s.in_solution)
+                    if status.gps.satellites else 0
+                ) if self.mode != MODE_HTTP else None,
+                "gps_avg_snr": (
+                    sum(s.snr for s in status.gps.satellites) / len(status.gps.satellites)
+                    if status.gps.satellites else None
+                ) if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: HTTP /status fields (available in both modes via hybrid fetch)
+                "gps_fixes_per_min": status.gps.fixes_per_min,
+                "gps_fixes_per_hour": status.gps.fixes_per_hour,
+                "freq_offset": status.freq_offset,
+                "sdr_hw": status.sdr_hw,
+
+                # v1.1.0: Thermal warning (WebSocket only)
+                "thermal_warning": (
+                    status.system.cpu_temp_c >= self.thermal_threshold
+                    if status.system.cpu_temp_c else False
+                ) if self.mode != MODE_HTTP else None,
+                "thermal_threshold": self.thermal_threshold,
+
+                # v1.1.0: PSKReporter correlation config
+                "pskr_callsign": self.pskr_callsign,
+
+                # v1.1.0: Reporter config from WebSocket cfg (auto-discovered)
+                "reporter_callsign": status.reporter.callsign if self.mode != MODE_HTTP else None,
+                "reporter_grid": status.reporter.grid if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: Channel type counts (WebSocket only)
+                "ft8_channels": (
+                    sum(1 for ch in status.channels if ch.channel_type == "ft8")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+                "wspr_channels": (
+                    sum(1 for ch in status.channels if ch.channel_type == "wspr")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+                "user_channels": (
+                    sum(1 for ch in status.channels if ch.channel_type == "user")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+                "idle_channels": (
+                    sum(1 for ch in status.channels if ch.channel_type == "idle")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: Per-mode decode totals (WebSocket only)
+                "ft8_total_decodes": (
+                    sum(ch.decoded_count for ch in status.channels if ch.channel_type == "ft8")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+                "wspr_total_decodes": (
+                    sum(ch.decoded_count for ch in status.channels if ch.channel_type == "wspr")
+                    if status.channels else 0
+                ) if self.mode != MODE_HTTP else None,
+
+                # v1.1.0: Satellite data (WebSocket only, when enabled)
+                "satellites": [],
+
+                # New sensors from /status endpoint (HTTP compatible)
+                "snr_all": self._parse_snr(status.snr, 0),
+                "snr_hf": self._parse_snr(status.snr, 1),
+                "gps_good": status.gps.good,
+                "altitude": status.gps.altitude_m,
+                "bands": status.bands,
+                "device_status": status.status,
+                "operator_email": status.op_email,
+
+                # Binary sensors from /status
+                "antenna_connected": status.ant_connected,
+                "offline": status.offline,
+                "adc_overflow": status.adc_overflow,
 
                 # Channels (if enabled)
                 "channels": [],
@@ -185,6 +315,11 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "mode": ch.mode,
                             "decoded_count": ch.decoded_count,
                             "active": True,
+                            # v1.1.0: Channel type and extension info
+                            "channel_type": ch.channel_type,
+                            "extension": ch.extension,
+                            "is_extension": ch.is_extension,
+                            "client_ip": ch.client_ip,
                         })
                     else:
                         # Empty channel slot
@@ -195,7 +330,26 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "mode": "",
                             "decoded_count": 0,
                             "active": False,
+                            "channel_type": "idle",
+                            "extension": "",
+                            "is_extension": False,
+                            "client_ip": "",
                         })
+
+            # v1.1.0: Add per-satellite data if enabled (WebSocket only)
+            if self.enable_satellites and self.mode != MODE_HTTP and status.gps.satellites:
+                for i, sat in enumerate(status.gps.satellites[:MAX_SATELLITES]):
+                    data["satellites"].append({
+                        "index": i,
+                        "channel": sat.channel,
+                        "system": sat.system,  # N=NavStar, G=GLONASS, B=BeiDou
+                        "prn": sat.prn,
+                        "snr": sat.snr,
+                        "rssi": sat.rssi,
+                        "azimuth": sat.azimuth,
+                        "elevation": sat.elevation,
+                        "in_solution": sat.in_solution,
+                    })
 
             return data
 
