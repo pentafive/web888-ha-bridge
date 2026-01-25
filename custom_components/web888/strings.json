@@ -41,7 +41,15 @@
         "data": {
           "scan_interval": "Update Interval (seconds)",
           "mode": "Connection Mode",
-          "enable_channels": "Enable Per-Channel Sensors"
+          "enable_channels": "Enable Per-Channel Sensors",
+          "enable_satellites": "Enable Per-Satellite Sensors",
+          "thermal_threshold": "Thermal Warning Threshold (°C)",
+          "pskr_callsign": "PSKReporter Callsign"
+        },
+        "data_description": {
+          "enable_satellites": "Create sensors for each tracked GPS satellite (up to 60 sensors)",
+          "thermal_threshold": "CPU temperature threshold for thermal warning (50-100°C)",
+          "pskr_callsign": "Your callsign for PSKReporter correlation (optional)"
         }
       }
     }
