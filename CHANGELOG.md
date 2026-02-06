@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-02-06
+
+### Fixed
+
+- **WebSocket Log Noise Reduction** - Consolidated disconnect logging from 3 warnings per event per device to 1. Client-level WebSocket close and poll error messages demoted to DEBUG; coordinator emits single WARNING on first failure per cycle.
+
+- **Exponential Reconnect Backoff** - Added progressive backoff when device is unreachable: 10s → 20s → 40s → 80s → 160s → 300s max. Resets on successful reconnect. Prevents log flooding when SDR devices are temporarily offline.
+
+- **Repeated Failure Log Demotion** - After initial disconnect WARNING, subsequent reconnect attempts log at DEBUG level until connection is restored. Reduces log noise from ~190 warnings/32min to ~2 warnings per device.
+
+- **pyproject.toml Version Sync** - Fixed version mismatch (was 1.0.0, now synced to 1.2.2).
+
+### Added
+
+- **Buy Me a Coffee Support Link** - Added donation badge to README and `.github/FUNDING.yml`.
+
 ## [1.2.1] - 2026-01-25
 
 ### Fixed

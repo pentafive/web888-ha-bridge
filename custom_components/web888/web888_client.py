@@ -650,7 +650,7 @@ class Web888Client:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.warning(f"WS poll error: {e}")
+                logger.debug(f"WS poll error: {e}")
                 self.status.connected = False
                 break  # Exit loop on error, let reconnect handle it
 
@@ -675,7 +675,7 @@ class Web888Client:
             logger.debug("WebSocket receive loop cancelled")
         except websockets.exceptions.ConnectionClosedError as e:
             # v1.1.0: Specific handling for WebSocket close errors
-            logger.warning(f"WebSocket closed unexpectedly: code={e.code} reason={e.reason}")
+            logger.debug(f"WebSocket closed unexpectedly: code={e.code} reason={e.reason}")
             self.status.connected = False
         except websockets.exceptions.ConnectionClosedOK:
             # Normal close - not an error

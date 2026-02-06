@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "web888-ha-bridge"
-version = "1.0.0"
+version = "1.2.2"
 description = "Web-888 SDR Home Assistant Bridge"
 readme = "README.md"
 license = {text = "Apache-2.0"}

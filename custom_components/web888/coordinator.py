@@ -36,6 +36,9 @@ from .const import (
     MODE_HTTP,
     MODE_WEBSOCKET,
     NUM_CHANNELS,
+    RECONNECT_BACKOFF_BASE,
+    RECONNECT_BACKOFF_FACTOR,
+    RECONNECT_BACKOFF_MAX,
 )
 from .web888_client import Web888Client, Web888Status
 
@@ -105,6 +108,9 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._connected = False
         self._last_status: Web888Status | None = None
 
+        # v1.2.2: Reconnect backoff state
+        self._consecutive_failures: int = 0
+
     @property
     def effective_mac(self) -> str:
         """Return MAC address: user-provided or auto-discovered from device config."""
@@ -164,20 +170,47 @@ class Web888Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             # v1.2.1: Sync coordinator state with client state
             # If client reports disconnected, reset coordinator state to trigger reconnect
             if self._connected and not self._client.status.connected:
-                _LOGGER.warning(
-                    "Client reports disconnected from %s:%s, will reconnect", self.host, self.port
-                )
+                self._consecutive_failures += 1
                 self._connected = False
+                if self._consecutive_failures == 1:
+                    _LOGGER.warning(
+                        "Client disconnected from %s:%s, will reconnect with backoff",
+                        self.host, self.port,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Client still disconnected from %s:%s (attempt %d)",
+                        self.host, self.port, self._consecutive_failures,
+                    )
 
             # Connect if not connected
             if not self._connected:
+                # v1.2.2: Exponential backoff before reconnect attempts
+                if self._consecutive_failures > 0:
+                    backoff = min(
+                        RECONNECT_BACKOFF_BASE * RECONNECT_BACKOFF_FACTOR ** (self._consecutive_failures - 1),
+                        RECONNECT_BACKOFF_MAX,
+                    )
+                    _LOGGER.debug(
+                        "Backing off %ds before reconnect attempt %d to %s:%s",
+                        backoff, self._consecutive_failures, self.host, self.port,
+                    )
+                    await asyncio.sleep(backoff)
+
                 _LOGGER.debug(
                     "Connecting to Web-888 at %s:%s (mode: %s)", self.host, self.port, self.mode
                 )
                 if not await asyncio.wait_for(self._client.connect(), timeout=CONNECTION_TIMEOUT):
                     raise UpdateFailed(f"Failed to connect to Web-888 at {self.host}:{self.port}")
                 self._connected = True
-                _LOGGER.info("Connected to Web-888 at %s:%s", self.host, self.port)
+                if self._consecutive_failures > 0:
+                    _LOGGER.info(
+                        "Reconnected to Web-888 at %s:%s after %d attempts",
+                        self.host, self.port, self._consecutive_failures,
+                    )
+                else:
+                    _LOGGER.info("Connected to Web-888 at %s:%s", self.host, self.port)
+                self._consecutive_failures = 0
 
             # For HTTP mode, fetch fresh status
             # v1.2.1: Use public method instead of private

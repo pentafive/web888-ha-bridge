@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/hacs/integration"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom"></a>
   <a href="https://github.com/pentafive/web888-ha-bridge/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pentafive/web888-ha-bridge" alt="License"></a>
+  <a href="https://buymeacoffee.com/pentafive"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buymeacoffee" alt="Buy Me a Coffee"></a>
 </p>
 
 Monitor your [Web-888 SDR](https://www.rx-888.com/web/) software-defined radio receiver in Home Assistant. Track users, GPS status, signal-to-noise ratio, channel activity, and more with real-time dashboard integration.
@@ -173,11 +174,21 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Type | Description |
 |---------|------|-------------|
+| 1.2.2 | HACS | WebSocket log noise reduction, exponential reconnect backoff |
+| 1.2.1 | HACS | Entity category fix, connection stability improvements |
+| 1.2.0 | HACS | Full device config exposure, feature flag sensors |
+| 1.1.0 | Both | Hybrid mode, thermal monitoring, satellite sensors |
 | 1.0.0 | Both | Initial release with HTTP and WebSocket support |
 
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) for details.
+
+## Support
+
+If you find this integration useful, consider supporting development:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-yellow?logo=buymeacoffee)](https://buymeacoffee.com/pentafive)
 
 ## Acknowledgements
 

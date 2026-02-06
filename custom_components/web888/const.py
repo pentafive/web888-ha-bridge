@@ -88,5 +88,10 @@ MAX_SCAN_INTERVAL: Final = 300
 # Connection timeout
 CONNECTION_TIMEOUT: Final = 10
 
+# Reconnect backoff (v1.2.2)
+RECONNECT_BACKOFF_BASE: Final = 10      # Base delay (seconds)
+RECONNECT_BACKOFF_MAX: Final = 300      # Max delay (seconds)
+RECONNECT_BACKOFF_FACTOR: Final = 2     # Exponential multiplier
+
 # Attribution
 ATTRIBUTION: Final = "Data from Web-888 SDR"
