@@ -66,7 +66,7 @@ async def attempt_login(session: aiohttp.ClientSession, base_url: str, password:
                     for cookie in resp.headers.getall("Set-Cookie", []):
                         if "kiwi=" in cookie:
                             return cookie.split("kiwi=")[1].split(";")[0]
-        except:
+        except Exception:
             pass
 
     # Try URL parameter auth (common in embedded devices)
@@ -78,7 +78,7 @@ async def attempt_login(session: aiohttp.ClientSession, base_url: str, password:
         ) as resp:
             if "kiwi" in resp.cookies:
                 return resp.cookies["kiwi"].value
-    except:
+    except Exception:
         pass
 
     return None

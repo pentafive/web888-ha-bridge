@@ -138,7 +138,7 @@ async def test_websocket(host: str, port: int = 8073):
             # Receive a few messages
             print("  Receiving messages (5 seconds)...")
             try:
-                for i in range(10):
+                for _i in range(10):
                     msg = await asyncio.wait_for(ws.recv(), timeout=1.0)
                     if isinstance(msg, bytes):
                         print(f"    Binary: {len(msg)} bytes, header: {msg[:10].hex()}")
@@ -165,7 +165,7 @@ async def main():
 
     # Ask about websocket test
     try:
-        import websockets
+        import websockets  # noqa: F401
         await test_websocket(host, port)
     except ImportError:
         print("Note: Install 'websockets' package for WebSocket testing")
